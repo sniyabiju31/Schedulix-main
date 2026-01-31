@@ -1,16 +1,11 @@
 import React, { useState } from "react";
 import "./auth.css";
-
-// DEMO ONLY — hardcoded credentials
-const DEFAULT_ADMIN = {
-  email: "admin@example.com",
-  password: "admin123",
-};
-
-const DEFAULT_STAFF = {
-  email: "staff@example.com",
-  password: "staff123",
-};
+import { auth, db } from "./firebase";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 
 export default function Auth() {
   const [mode, setMode] = useState("login");
@@ -28,40 +23,45 @@ export default function Auth() {
     });
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
 
-    // LOGIN MODE
-    if (mode === "login") {
-      // Admin login
-      if (
-        role === "admin" &&
-        form.email === DEFAULT_ADMIN.email &&
-        form.password === DEFAULT_ADMIN.password
-      ) {
-        alert("Admin login successful ✅");
-        window.location.href = "/admin-home";
-        return;
-      }
+    const { email, password, name } = form;
 
-      // Staff login
-      if (
-        role === "staff" &&
-        form.email === DEFAULT_STAFF.email &&
-        form.password === DEFAULT_STAFF.password
-      ) {
-        alert("Staff login successful ✅");
-        window.location.href = "/staff-home";
-        return;
+    try {
+      if (mode === "signup") {
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
+        const user = userCredential.user;
+        const userRole = role;
+        await setDoc(doc(db, userRole, user.uid), {
+          name,
+          email,
+        });
+        alert(`Signed up as ${role.toUpperCase()}`);
+        window.location.href = "/home";
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        const user = auth.currentUser;
+        if (user) {
+          const userRole = role;
+          const docRef = doc(db, userRole, user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            alert(`${role} login successful ✅`);
+            window.location.href =
+              userRole === "admin" ? "/admin-home" : "/staff-home";
+          } else {
+            alert(`You are not authorized as a ${role} ❌`);
+          }
+        }
       }
-
-      alert("Invalid email or password ❌");
-      return;
+    } catch (error) {
+      alert(error.message);
     }
-
-    // SIGNUP MODE (demo only)
-    alert(`Signed up as ${role.toUpperCase()}`);
-    window.location.href = "/home";
   }
 
   return (
@@ -107,11 +107,7 @@ export default function Auth() {
           {mode === "signup" && (
             <div className="field">
               <label>Name</label>
-              <input
-                name="name"
-                value={form.name}
-                onChange={onChange}
-              />
+              <input name="name" value={form.name} onChange={onChange} />
             </div>
           )}
 
@@ -141,14 +137,6 @@ export default function Auth() {
             {mode === "login" ? `Login as ${role}` : `Sign up as ${role}`}
           </button>
         </form>
-
-        {mode === "login" && (
-          <div className="demo-hint">
-            <h4>Demo Credentials</h4>
-            <p><strong>Admin:</strong> admin@example.com / admin123</p>
-            <p><strong>Staff:</strong> staff@example.com / staff123</p>
-          </div>
-        )}
       </div>
     </div>
   );

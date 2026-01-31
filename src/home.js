@@ -1,11 +1,32 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./home.css";
+import { auth, db } from "./firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
 
 const StaffHomePage = () => {
   const [activeMenu, setActiveMenu] = useState("timetable");
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        const docRef = doc(db, "staff", user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setUser(docSnap.data());
+        }
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleSignOut = () => {
+    auth.signOut();
+    window.location.href = "/";
+  };
 
   return (
     <div className="home-layout">
@@ -33,6 +54,10 @@ const StaffHomePage = () => {
             Class Schedule
           </li>
         </ul>
+
+        <button onClick={handleSignOut} className="sign-out-btn">
+          Sign Out
+        </button>
       </aside>
 
       {/* Main Content */}
@@ -44,7 +69,7 @@ const StaffHomePage = () => {
               <div className="profile-info">
                 <div className="info-item">
                   <label>Name:</label>
-                  <span>John Doe</span>
+                  <span>{user ? user.name : "Loading..."}</span>
                 </div>
                 <div className="info-item">
                   <label>Role:</label>
@@ -52,7 +77,7 @@ const StaffHomePage = () => {
                 </div>
                 <div className="info-item">
                   <label>Email:</label>
-                  <span>john@example.com</span>
+                  <span>{user ? user.email : "Loading..."}</span>
                 </div>
                 <div className="info-item">
                   <label>Phone:</label>
@@ -90,9 +115,7 @@ const StaffHomePage = () => {
                     {days.map((day) => (
                       <td
                         key={day + hour}
-                        onClick={() =>
-                          alert(`Class: ${day} at ${hour}`)
-                        }
+                        onClick={() => alert(`Class: ${day} at ${hour}`)}
                       >
                         <span className="slot">Math 101</span>
                       </td>

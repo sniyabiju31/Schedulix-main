@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./AdminHome.css";
+import { auth, db } from "./firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
@@ -17,6 +19,25 @@ const AdminHomePage = () => {
   const [subject, setSubject] = useState("");
   const [teacher, setTeacher] = useState("");
   const [room, setRoom] = useState("");
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        const docRef = doc(db, "admin", user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setUser(docSnap.data());
+        }
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleSignOut = () => {
+    auth.signOut();
+    window.location.href = "/";
+  };
 
   const handleSlotClick = (day, hour) => {
     const key = `${selectedClass}-${day}-${hour}`;
@@ -90,6 +111,9 @@ const AdminHomePage = () => {
             Personal Details
           </li>
         </ul>
+        <button onClick={handleSignOut} className="sign-out-btn">
+          Sign Out
+        </button>
       </aside>
 
       {/* Main Content */}
@@ -243,11 +267,11 @@ const AdminHomePage = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label>Name:</label>
-                    <input type="text" defaultValue="Admin User" />
+                    <input type="text" value={user ? user.name : "Loading..."} readOnly />
                   </div>
                   <div className="form-group">
                     <label>Email:</label>
-                    <input type="email" defaultValue="admin@schedulix.com" />
+                    <input type="email" value={user ? user.email : "Loading..."} readOnly />
                   </div>
                 </div>
                 <div className="form-row">
