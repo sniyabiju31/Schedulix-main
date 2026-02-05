@@ -1,31 +1,97 @@
 import React, { useState, useEffect } from "react";
 import "./home.css";
-import { auth, db } from "./firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { auth, db, firebaseConfig } from "./firebase";
+import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
+const departments = ["Computer Science", "Electronics & Communication", "Mechanical Engineering", "Civil Engineering", "Electrical & Electronics", "Information Technology", "Artificial Intelligence", "Cyber Security"];
 
 const StaffHomePage = () => {
   const [activeMenu, setActiveMenu] = useState("timetable");
   const [user, setUser] = useState(null);
 
+  // Preference Form State
+  const [prefForm, setPrefForm] = useState({
+    semester: "Semester 1",
+    department: "Computer Science",
+    subjectPref1: "",
+    subjectPref2: "",
+    subjectPref3: "",
+    classPref1: "",
+    classPref2: "",
+    classPref3: ""
+  });
+  const [loadingPref, setLoadingPref] = useState(false);
+
+  const handlePrefChange = (e) => {
+    setPrefForm({ ...prefForm, [e.target.name]: e.target.value });
+  };
+
+  const handlePreferenceSubmit = async (e) => {
+    e.preventDefault();
+    if (!user) return;
+    setLoadingPref(true);
+    try {
+      await addDoc(collection(db, "preferences"), {
+        ...prefForm,
+        teacherUid: auth.currentUser.uid,
+        teacherEmpId: user.employeeId,
+        teacherName: user.name,
+        teacherEmail: user.email,
+        createdAt: serverTimestamp()
+      });
+      alert("Preferences submitted successfully!");
+      setPrefForm({
+        semester: "Semester 1",
+        department: "Computer Science",
+        subjectPref1: "",
+        subjectPref2: "",
+        subjectPref3: "",
+        classPref1: "",
+        classPref2: "",
+        classPref3: ""
+      });
+      setActiveMenu("timetable"); // Go back to timetable or stay
+    } catch (error) {
+      console.error("Error submitting preferences:", error);
+      alert("Error submitting preferences: " + error.message);
+    } finally {
+      setLoadingPref(false);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        const docRef = doc(db, "staff", user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setUser(docSnap.data());
+      try {
+        if (user) {
+          const docRef = doc(db, "staff", user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setUser(docSnap.data());
+          } else {
+            console.warn("Staff document not found for user:", user.uid);
+            setUser(null);
+          }
+        } else {
+          setUser(null);
         }
+      } catch (error) {
+        console.error("Auth onAuthStateChanged error (staff):", error);
+        alert(`${error.code || "auth/error"}: ${error.message}`);
       }
     });
     return unsubscribe;
   }, []);
 
-  const handleSignOut = () => {
-    auth.signOut();
-    window.location.href = "/";
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Sign out error:", error);
+      alert(`${error.code || "auth/error"}: ${error.message}`);
+    }
   };
 
   return (
@@ -53,11 +119,29 @@ const StaffHomePage = () => {
           >
             Class Schedule
           </li>
+          <li
+            className={activeMenu === "preferences" ? "active" : ""}
+            onClick={() => setActiveMenu("preferences")}
+          >
+            Subject Preferences
+          </li>
         </ul>
 
         <button onClick={handleSignOut} className="sign-out-btn">
           Sign Out
         </button>
+        {process.env.NODE_ENV !== 'production' && (
+          <button
+            onClick={() => {
+              console.log('auth.currentUser:', auth.currentUser);
+              console.log('firebaseConfig:', firebaseConfig);
+              alert('Debug info logged to console');
+            }}
+            className="debug-btn"
+          >
+            Debug Info
+          </button>
+        )}
       </aside>
 
       {/* Main Content */}
@@ -80,16 +164,12 @@ const StaffHomePage = () => {
                   <span>{user ? user.email : "Loading..."}</span>
                 </div>
                 <div className="info-item">
-                  <label>Phone:</label>
-                  <span>+1-234-567-8900</span>
-                </div>
-                <div className="info-item">
                   <label>Department:</label>
-                  <span>Mathematics</span>
+                  <span>{user ? user.department : "N/A"}</span>
                 </div>
                 <div className="info-item">
                   <label>Employee ID:</label>
-                  <span>STF001</span>
+                  <span>{user ? user.employeeId : "N/A"}</span>
                 </div>
               </div>
             </div>
@@ -117,7 +197,7 @@ const StaffHomePage = () => {
                         key={day + hour}
                         onClick={() => alert(`Class: ${day} at ${hour}`)}
                       >
-                        <span className="slot">Math 101</span>
+                        <span className="slot"></span>
                       </td>
                     ))}
                   </tr>
@@ -132,50 +212,82 @@ const StaffHomePage = () => {
             <h1>Class Schedule Overview</h1>
             <div className="schedule-grid">
               <div className="schedule-card">
-                <h3>Monday</h3>
-                <ul>
-                  <li>8AM - Math 101 (Room 201)</li>
-                  <li>9AM - Algebra (Room 201)</li>
-                  <li>10AM - Geometry (Room 201)</li>
-                  <li>11AM - Free Period</li>
-                </ul>
+                <h3>Scheduled Classes</h3>
+                <p>No classes scheduled yet.</p>
               </div>
-              <div className="schedule-card">
-                <h3>Tuesday</h3>
-                <ul>
-                  <li>8AM - Math 101 (Room 201)</li>
-                  <li>9AM - Calculus (Room 201)</li>
-                  <li>10AM - Statistics (Room 201)</li>
-                  <li>11AM - Free Period</li>
-                </ul>
-              </div>
-              <div className="schedule-card">
-                <h3>Wednesday</h3>
-                <ul>
-                  <li>8AM - Math 101 (Room 201)</li>
-                  <li>9AM - Algebra (Room 201)</li>
-                  <li>10AM - Free Period</li>
-                  <li>11AM - Office Hours</li>
-                </ul>
-              </div>
-              <div className="schedule-card">
-                <h3>Thursday</h3>
-                <ul>
-                  <li>8AM - Math 101 (Room 201)</li>
-                  <li>9AM - Geometry (Room 201)</li>
-                  <li>10AM - Calculus (Room 201)</li>
-                  <li>11AM - Free Period</li>
-                </ul>
-              </div>
-              <div className="schedule-card">
-                <h3>Friday</h3>
-                <ul>
-                  <li>8AM - Math 101 (Room 201)</li>
-                  <li>9AM - Statistics (Room 201)</li>
-                  <li>10AM - Free Period</li>
-                  <li>11AM - Office Hours</li>
-                </ul>
-              </div>
+            </div>
+          </div>
+        )}
+
+        {activeMenu === "preferences" && (
+          <div className="preferences-section">
+            <h1>Submit Subject Preferences</h1>
+            <div className="form-container">
+              <form onSubmit={handlePreferenceSubmit}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Semester</label>
+                    <select name="semester" value={prefForm.semester} onChange={handlePrefChange}>
+                      <option>Semester 1</option>
+                      <option>Semester 2</option>
+                      <option>Semester 3</option>
+                      <option>Semester 4</option>
+                      <option>Semester 5</option>
+                      <option>Semester 6</option>
+                      <option>Semester 7</option>
+                      <option>Semester 8</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Department</label>
+                    <select name="department" value={prefForm.department} onChange={handlePrefChange}>
+                      {departments.map(dept => <option key={dept}>{dept}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <h3>Subject Preferences</h3>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Preference 1</label>
+                    <input name="subjectPref1" value={prefForm.subjectPref1} onChange={handlePrefChange} required placeholder="e.g. Data Structures" />
+                  </div>
+                  <div className="form-group">
+                    <label>Preference 2</label>
+                    <input name="subjectPref2" value={prefForm.subjectPref2} onChange={handlePrefChange} placeholder="e.g. Algorithms" />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Preference 3</label>
+                    <input name="subjectPref3" value={prefForm.subjectPref3} onChange={handlePrefChange} placeholder="e.g. Database" />
+                  </div>
+                </div>
+
+                <h3>Class Preferences</h3>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Class Pref 1</label>
+                    <input name="classPref1" value={prefForm.classPref1} onChange={handlePrefChange} required placeholder="e.g. Class 10A" />
+                  </div>
+                  <div className="form-group">
+                    <label>Class Pref 2</label>
+                    <input name="classPref2" value={prefForm.classPref2} onChange={handlePrefChange} placeholder="e.g. Class 9B" />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Class Pref 3</label>
+                    <input name="classPref3" value={prefForm.classPref3} onChange={handlePrefChange} placeholder="e.g. Class 8A" />
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button type="submit" className="save-btn" disabled={loadingPref}>
+                    {loadingPref ? "Submitting..." : "Submit Preferences"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
