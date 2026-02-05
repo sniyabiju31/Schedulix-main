@@ -1,5 +1,6 @@
 /* Modern Reset & Font */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Modern Reset & Font */
+/* We rely on index.css for global variables */
 
 * {
   box-sizing: border-box;
@@ -8,59 +9,63 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
 }
 
 /* --- Layout with Animated Background --- */
 .admin-layout {
   display: flex;
   height: 100vh;
-  color: #e2e8f0;
-  /* Light text for dark theme */
-  /* Same animated gradient as Auth page */
-  background: linear-gradient(-45deg, #0f172a, #1e293b, #312e81, #4c1d95);
-  background-size: 400% 400%;
-  animation: gradientBG 15s ease infinite;
+  color: var(--text-primary);
+  /* Cyber-Academia Background */
+  background: radial-gradient(circle at 10% 20%, rgb(15, 23, 42) 0%, rgb(20, 30, 50) 90%);
+  background-size: cover;
+  position: relative;
   overflow: hidden;
-  /* Prevent body scroll if content overflows, we scroll content area */
 }
 
-@keyframes gradientBG {
-  0% {
-    background-position: 0% 50%;
-  }
-
-  50% {
-    background-position: 100% 50%;
-  }
-
-  100% {
-    background-position: 0% 50%;
-  }
+/* Add a subtle grid overlay for "tech" feel */
+.admin-layout::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* --- Glassmorphism Sidebar --- */
 .admin-sidebar {
   width: 280px;
-  background: rgba(15, 23, 42, 0.6);
-  /* Darker semi-transparent */
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid var(--glass-border);
   padding: 24px;
   display: flex;
   flex-direction: column;
+  z-index: 10;
+  box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
 }
 
 .admin-logo {
   text-align: center;
   margin-bottom: 40px;
-  color: #fff;
-  font-size: 1.5rem;
+  color: var(--accent-cyan);
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
   font-weight: 700;
-  letter-spacing: -0.5px;
-  text-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
-  /* Glow effect */
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.6);
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: 20px;
 }
 
 .admin-menu {
@@ -72,63 +77,62 @@ body {
 
 .admin-menu li {
   padding: 14px 18px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   cursor: pointer;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  border-radius: 8px;
+  /* Sharper corners for tech look */
+  transition: all 0.3s ease;
   font-size: 0.95rem;
+  font-family: var(--font-heading);
   font-weight: 500;
-  color: #94a3b8;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
+  border: 1px solid transparent;
 }
 
 .admin-menu li:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: rgba(0, 243, 255, 0.05);
+  color: var(--accent-cyan);
+  border-color: rgba(0, 243, 255, 0.2);
   transform: translateX(4px);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.1);
 }
 
 .admin-menu li.active {
-  background: rgba(99, 102, 241, 0.2);
-  /* Indigo tint */
-  color: #fff;
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  box-shadow: 0 0 15px rgba(99, 102, 241, 0.15);
+  background: rgba(188, 19, 254, 0.15);
+  /* Violet tint for active */
+  color: var(--accent-cyan);
+  /* Cyan text */
+  border: 1px solid var(--accent-violet);
+  box-shadow: 0 0 15px rgba(188, 19, 254, 0.3);
+  text-shadow: 0 0 5px rgba(0, 243, 255, 0.5);
 }
 
 .menu-icon {
-  margin-right: 10px;
+  margin-right: 12px;
+  font-size: 1.1rem;
 }
 
 .sign-out-btn {
   margin-top: auto;
   padding: 12px;
-  background: rgba(239, 68, 68, 0.1);
-  /* Red tint */
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.3);
   color: #fca5a5;
-  border-radius: 12px;
+  border-radius: 4px;
   cursor: pointer;
-  font-weight: 600;
-  transition: all 0.2s ease;
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
 }
 
 .sign-out-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
   color: #fff;
-}
-
-.debug-btn {
-  margin-top: 10px;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  color: #64748b;
-  padding: 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.8rem;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
 }
 
 /* --- Main Content Area --- */
@@ -137,13 +141,19 @@ body {
   padding: 40px;
   overflow-y: auto;
   position: relative;
+  z-index: 5;
 }
 
 .admin-content h1 {
   margin-bottom: 30px;
   color: #fff;
-  font-size: 2rem;
-  font-weight: 700;
+  font-family: var(--font-heading);
+  font-size: 2.2rem;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  border-left: 4px solid var(--accent-cyan);
+  padding-left: 15px;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 /* --- Cards (Glass Style) --- */
@@ -152,13 +162,42 @@ body {
 .admin-timetable,
 .add-subject-section .subjects-table,
 .users-table {
-  /* Reuse style for all containers */
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  /* Techy corners */
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  position: relative;
+  overflow: hidden;
+}
+
+/* glowing corner accents for cards */
+.stat-card::before,
+.form-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-top: 2px solid var(--accent-cyan);
+  border-left: 2px solid var(--accent-cyan);
+  pointer-events: none;
+}
+
+.stat-card::after,
+.form-container::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  border-bottom: 2px solid var(--accent-violet);
+  border-right: 2px solid var(--accent-violet);
+  pointer-events: none;
 }
 
 /* --- Stats Grid --- */
@@ -171,44 +210,49 @@ body {
 .stat-card {
   padding: 30px;
   text-align: center;
-  transition: transform 0.3s ease, background 0.3s;
+  transition: transform 0.3s ease, box-shadow 0.3s;
 }
 
 .stat-card:hover {
   transform: translateY(-5px);
-  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 15px 35px -5px rgba(0, 243, 255, 0.15);
+  border-color: var(--accent-cyan);
 }
 
 .stat-card h3 {
   margin: 0 0 10px 0;
-  color: #94a3b8;
-  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
 }
 
 .stat-card p {
   margin: 0;
-  font-size: 3rem;
+  font-size: 3.5rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
+  font-family: var(--font-mono);
+  /* Terminal font for numbers */
+  background: linear-gradient(135deg, #fff 0%, var(--accent-cyan) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 5px rgba(0, 243, 255, 0.4));
 }
 
 /* --- Timetable & Selectors --- */
 .timetable-section {
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeIn 0.5s ease-out;
 }
 
 .selector-section {
   margin-bottom: 30px;
   display: flex;
   gap: 20px;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(15, 23, 42, 0.5);
   padding: 15px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
 }
 
 .selector {
@@ -218,36 +262,34 @@ body {
 }
 
 .selector label {
-  color: #cbd5e1;
-  font-size: 0.9rem;
+  color: var(--accent-cyan);
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .selector select,
 .form-group input,
 .form-group select {
   padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(15, 23, 42, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  /* Subtle border */
-  border-radius: 10px;
-  color: #fff;
+  border-radius: 4px;
+  color: var(--accent-cyan);
   font-size: 0.95rem;
-  font-family: inherit;
+  font-family: var(--font-mono);
   transition: all 0.2s ease;
-}
-
-.selector select option {
-  background: #1e293b;
-  /* Solid background for options (browser limitation) */
-  color: #fff;
+  text-transform: uppercase;
 }
 
 .selector select:focus,
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+  background: rgba(15, 23, 42, 1);
 }
 
 /* --- Table Styles --- */
@@ -264,22 +306,28 @@ body {
 .admin-timetable th,
 .subjects-table th,
 .users-table th {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: rgba(0, 243, 255, 0.05);
+  /* Very subtle cyan tint */
+  color: var(--accent-cyan);
+  font-family: var(--font-heading);
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   text-align: left;
-  /* Default align */
-  padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 18px;
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .admin-timetable td,
 .subjects-table td,
 .users-table td {
   padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   font-size: 0.9rem;
   color: #cbd5e1;
+  font-family: var(--font-mono);
+  /* Terminal font for data */
+  border-right: 1px solid rgba(255, 255, 255, 0.02);
 }
 
 .admin-timetable td:hover {
@@ -292,33 +340,42 @@ body {
   vertical-align: top;
   cursor: pointer;
   transition: background 0.2s;
+  position: relative;
 }
 
 .timetable-cell:hover {
-  background: rgba(99, 102, 241, 0.1) !important;
+  background: rgba(0, 243, 255, 0.1) !important;
+  box-shadow: inset 0 0 15px rgba(0, 243, 255, 0.1);
+}
+
+.class-info {
+  border-left: 2px solid var(--accent-violet);
+  padding-left: 8px;
 }
 
 .class-info .subject {
   color: #fff;
-  font-weight: 600;
-  font-size: 0.85rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 }
 
 .class-info .teacher {
-  color: #94a3b8;
-  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
   margin-top: 2px;
 }
 
 .class-info .room {
-  color: #6366f1;
+  color: var(--accent-cyan);
   font-size: 0.8rem;
-  font-weight: 500;
-  margin-top: 2px;
+  font-weight: 600;
+  margin-top: 4px;
 }
 
 .slot {
-  color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.05);
   font-size: 1.5rem;
   font-weight: bold;
 }
@@ -332,15 +389,16 @@ body {
 
 .add-subject-section .form-container {
   max-width: 800px;
-  /* Wider for subject form */
 }
 
 .form-container h2 {
-  color: #fff;
+  color: var(--accent-violet);
   margin-top: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--glass-border);
   padding-bottom: 15px;
   margin-bottom: 25px;
+  font-family: var(--font-heading);
+  letter-spacing: 1px;
 }
 
 .form-row {
@@ -353,70 +411,80 @@ body {
 .form-group label {
   display: block;
   margin-bottom: 8px;
-  color: #94a3b8;
-  font-size: 0.9rem;
-  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-family: var(--font-heading);
+  text-transform: uppercase;
 }
 
 /* Buttons */
 button[type="submit"],
 .save-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(90deg, var(--accent-violet) 0%, #a855f7 100%);
   color: white;
   border: none;
   padding: 12px 24px;
-  border-radius: 10px;
+  border-radius: 4px;
+  font-family: var(--font-heading);
   font-weight: 600;
+  letter-spacing: 1px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 15px rgba(188, 19, 254, 0.4);
+  text-transform: uppercase;
 }
 
 button[type="submit"]:hover,
 .save-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
-  filter: brightness(1.1);
+  box-shadow: 0 0 25px rgba(188, 19, 254, 0.6);
+  filter: brightness(1.2);
 }
 
 button[type="button"],
 .cancel-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 12px 24px;
-  border-radius: 10px;
+  border-radius: 4px;
+  font-family: var(--font-heading);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  text-transform: uppercase;
 }
 
 button[type="button"]:hover,
 .cancel-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--text-primary);
   color: #fff;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .edit-btn {
   padding: 6px 12px;
-  font-size: 0.8rem;
-  background: rgba(99, 102, 241, 0.2);
-  color: #a5b4fc;
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: 6px;
+  font-size: 0.75rem;
+  background: rgba(0, 243, 255, 0.1);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 243, 255, 0.2);
+  border-radius: 4px;
   cursor: pointer;
   transition: 0.2s;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
 }
 
 .edit-btn:hover {
-  background: rgba(99, 102, 241, 0.4);
-  color: #fff;
+  background: rgba(0, 243, 255, 0.2);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
 }
 
 /* --- Form Overlay --- */
 .form-overlay {
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(5px);
+  background: rgba(0, 0, 0, 0.85);
+  /* Darker overlay */
+  backdrop-filter: blur(8px);
   z-index: 50;
 }
 
@@ -443,7 +511,7 @@ button[type="button"]:hover,
   .admin-sidebar {
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--glass-border);
   }
 
   .admin-menu {

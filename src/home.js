@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import "./home.css";
-import { auth, db, firebaseConfig } from "./firebase";
+import { auth, db } from "./firebase";
 import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { User, Calendar, FileText, Star } from "lucide-react";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
@@ -105,43 +106,32 @@ const StaffHomePage = () => {
             className={activeMenu === "profile" ? "active" : ""}
             onClick={() => setActiveMenu("profile")}
           >
-            Personal Details
+            <User size={20} className="menu-icon" /> Personal Details
           </li>
           <li
             className={activeMenu === "timetable" ? "active" : ""}
             onClick={() => setActiveMenu("timetable")}
           >
-            My Timetable
+            <Calendar size={20} className="menu-icon" /> My Timetable
           </li>
           <li
             className={activeMenu === "schedule" ? "active" : ""}
             onClick={() => setActiveMenu("schedule")}
           >
-            Class Schedule
+            <FileText size={20} className="menu-icon" /> Class Schedule
           </li>
           <li
             className={activeMenu === "preferences" ? "active" : ""}
             onClick={() => setActiveMenu("preferences")}
           >
-            Subject Preferences
+            <Star size={20} className="menu-icon" /> Subject Preferences
           </li>
         </ul>
 
         <button onClick={handleSignOut} className="sign-out-btn">
           Sign Out
         </button>
-        {process.env.NODE_ENV !== 'production' && (
-          <button
-            onClick={() => {
-              console.log('auth.currentUser:', auth.currentUser);
-              console.log('firebaseConfig:', firebaseConfig);
-              alert('Debug info logged to console');
-            }}
-            className="debug-btn"
-          >
-            Debug Info
-          </button>
-        )}
+
       </aside>
 
       {/* Main Content */}
