@@ -48,6 +48,10 @@ const AdminHomePage = () => {
   const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [editingTeacherId, setEditingTeacherId] = useState(null);
 
+  // Preferences management
+  const [preferencesList, setPreferencesList] = useState([]);
+  const [loadingPreferences, setLoadingPreferences] = useState(false);
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       try {
@@ -164,6 +168,28 @@ const AdminHomePage = () => {
       }
     };
     fetchTeachers();
+    return () => { mounted = false; };
+  }, [activeMenu]);
+
+  // Fetch preferences when menu is active
+  useEffect(() => {
+    if (activeMenu !== 'preferences') return;
+    let mounted = true;
+    const fetchPreferences = async () => {
+      setLoadingPreferences(true);
+      try {
+        const q = query(collection(db, "preferences"));
+        const snap = await getDocs(q);
+        if (!mounted) return;
+        const prefs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setPreferencesList(prefs);
+      } catch (err) {
+        console.error("Fetch preferences error:", err);
+      } finally {
+        if (mounted) setLoadingPreferences(false);
+      }
+    };
+    fetchPreferences();
     return () => { mounted = false; };
   }, [activeMenu]);
 
@@ -326,6 +352,12 @@ const AdminHomePage = () => {
             onClick={() => setActiveMenu("overview")}
           >
             Overview
+          </li>
+          <li
+            className={activeMenu === "preferences" ? "active" : ""}
+            onClick={() => setActiveMenu("preferences")}
+          >
+            Subject Preferences
           </li>
           <li
             className={activeMenu === "class-timetable" ? "active" : ""}
@@ -681,6 +713,57 @@ const AdminHomePage = () => {
                 </table>
               )}
             </div>
+          </div>
+        )}
+
+        {activeMenu === "preferences" && (
+          <div className="preferences-section">
+            <h1>Submitted Subject Preferences</h1>
+            {loadingPreferences ? <p>Loading...</p> : preferencesList.length === 0 ? <p>No preferences submitted yet.</p> : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="subjects-table">
+                  <thead>
+                    <tr>
+                      <th>Teacher</th>
+                      <th>Dept</th>
+                      <th>Sem</th>
+                      <th>Subject Prefs</th>
+                      <th>Class Prefs</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preferencesList.map(p => (
+                      <tr key={p.id}>
+                        <td>
+                          <div style={{ fontWeight: 'bold' }}>{p.teacherName}</div>
+                          <div style={{ fontSize: '0.85em', color: '#666' }}>{p.teacherEmpId}</div>
+                        </td>
+                        <td>{p.department}</td>
+                        <td>{p.semester}</td>
+                        <td>
+                          <ol style={{ paddingLeft: '20px', margin: 0 }}>
+                            {p.subjectPref1 && <li>{p.subjectPref1}</li>}
+                            {p.subjectPref2 && <li>{p.subjectPref2}</li>}
+                            {p.subjectPref3 && <li>{p.subjectPref3}</li>}
+                          </ol>
+                        </td>
+                        <td>
+                          <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                            {p.classPref1 && <li>{p.classPref1}</li>}
+                            {p.classPref2 && <li>{p.classPref2}</li>}
+                            {p.classPref3 && <li>{p.classPref3}</li>}
+                          </ul>
+                        </td>
+                        <td>
+                          {p.createdAt ? (p.createdAt.seconds ? new Date(p.createdAt.seconds * 1000).toLocaleDateString() : 'Just now') : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
