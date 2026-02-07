@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import "./home.css";
 import { auth, rtdb, firebaseConfig } from "./firebase";
 import { ref, get, set, push, serverTimestamp } from "firebase/database";
+import { auth, db } from "./firebase";
+import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { User, Calendar, FileText, Star } from "lucide-react";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
@@ -180,31 +183,32 @@ const StaffHomePage = () => {
             className={activeMenu === "profile" ? "active" : ""}
             onClick={() => setActiveMenu("profile")}
           >
-            Personal Details
+            <User size={20} className="menu-icon" /> Personal Details
           </li>
           <li
             className={activeMenu === "timetable" ? "active" : ""}
             onClick={() => setActiveMenu("timetable")}
           >
-            My Timetable
+            <Calendar size={20} className="menu-icon" /> My Timetable
           </li>
           <li
             className={activeMenu === "schedule" ? "active" : ""}
             onClick={() => setActiveMenu("schedule")}
           >
-            Class Schedule
+            <FileText size={20} className="menu-icon" /> Class Schedule
           </li>
           <li
             className={activeMenu === "preferences" ? "active" : ""}
             onClick={() => setActiveMenu("preferences")}
           >
-            Subject Preferences
+            <Star size={20} className="menu-icon" /> Subject Preferences
           </li>
         </ul>
 
         <button onClick={handleSignOut} className="sign-out-btn">
           Sign Out
         </button>
+
       </aside>
 
       {/* Main Content */}

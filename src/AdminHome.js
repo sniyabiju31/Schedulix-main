@@ -5,8 +5,14 @@ import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, setDoc, serverTimestamp, getFirestore } from "firebase/firestore";
 import { ref as rtdbRef, get as rtdbGet, push, set, update, query as rtdbQuery, orderByChild, equalTo, getDatabase } from "firebase/database";
+import { auth, db, rtdb } from "./firebase";
+
+
+import { doc, getDoc, addDoc, collection, getDocs, query, where, updateDoc } from "firebase/firestore";
+import { ref as rtdbRef, get as rtdbGet } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { cloudFunctions } from "./firebase";
+import { LayoutDashboard, ClipboardList, Calendar, Clock, PlusCircle, GraduationCap, Users } from "lucide-react";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
@@ -537,60 +543,49 @@ const AdminHomePage = () => {
             className={activeMenu === "overview" ? "active" : ""}
             onClick={() => setActiveMenu("overview")}
           >
-            Overview
+            <LayoutDashboard size={20} className="menu-icon" /> Overview
           </li>
           <li
             className={activeMenu === "preferences" ? "active" : ""}
             onClick={() => setActiveMenu("preferences")}
           >
-            Subject Preferences
+            <ClipboardList size={20} className="menu-icon" /> Subject Preferences
           </li>
           <li
             className={activeMenu === "class-timetable" ? "active" : ""}
             onClick={() => setActiveMenu("class-timetable")}
           >
-            Class Timetables
+            <Calendar size={20} className="menu-icon" /> Class Timetables
           </li>
           <li
             className={activeMenu === "teacher-timetable" ? "active" : ""}
             onClick={() => setActiveMenu("teacher-timetable")}
           >
-            Teacher Timetables
+            <Clock size={20} className="menu-icon" /> Teacher Timetables
           </li>
           <li
             className={activeMenu === "add-subject" ? "active" : ""}
             onClick={() => setActiveMenu("add-subject")}
           >
-            <span className="menu-icon">➕</span> Add Subject
+            <PlusCircle size={20} className="menu-icon" /> Add Subject
           </li>
           <li
             className={activeMenu === "teachers" ? "active" : ""}
             onClick={() => setActiveMenu("teachers")}
           >
-            Teachers
+            <GraduationCap size={20} className="menu-icon" /> Teachers
           </li>
           <li
             className={activeMenu === "users" ? "active" : ""}
             onClick={() => setActiveMenu("users")}
           >
-            Users
+            <Users size={20} className="menu-icon" /> Users
           </li>
         </ul>
         <button onClick={handleSignOut} className="sign-out-btn">
           Sign Out
         </button>
-        {process.env.NODE_ENV !== 'production' && (
-          <button
-            onClick={() => {
-              console.log('auth.currentUser:', auth.currentUser);
-              console.log('firebaseConfig:', firebaseConfig);
-              alert('Debug info logged to console');
-            }}
-            className="debug-btn"
-          >
-            Debug Info
-          </button>
-        )}
+
       </aside>
 
       {/* Main Content */}
