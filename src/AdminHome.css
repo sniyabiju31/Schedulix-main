@@ -280,6 +280,13 @@ body {
   font-size: 0.95rem;
   font-family: var(--font-mono);
   transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.selector select option {
+  background: #1e293b;
+  /* Solid background for options (browser limitation) */
+  color: #fff;
   text-transform: uppercase;
 }
 
@@ -389,6 +396,9 @@ body {
 
 .add-subject-section .form-container {
   max-width: 800px;
+  /* Wider for subject form */
+  position: relative;
+  z-index: 20;
 }
 
 .form-container h2 {

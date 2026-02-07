@@ -29,3 +29,4 @@ exports.listUsersForAdmin = functions.https.onCall(async (data, context) => {
 
   return { users };
 });
+
