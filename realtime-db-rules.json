@@ -2,17 +2,14 @@
   "rules": {
     "users": {
       "$uid": {
-        // Allow reads for everyone, but writes only from an authenticated user that matches the uid
         ".read": true,
         ".write": "auth != null && auth.uid === $uid",
-        // Basic validation
         ".validate": "newData.hasChildren(['email','name','role','createdAt']) && newData.child('email').isString() && newData.child('name').isString() && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'staff')"
       }
     },
     "admins": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        // Only server-side or admin scripts should write here; block client writes
         ".write": false
       }
     },
@@ -27,6 +24,22 @@
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid"
       }
+    },
+    "subjects": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "semester",
+        "code"
+      ]
+    },
+    "teachers": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "email",
+        "employeeId"
+      ]
     }
   }
-}  
+}

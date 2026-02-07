@@ -234,6 +234,7 @@ body {
   font-size: 0.95rem;
   font-family: inherit;
   transition: all 0.2s ease;
+  pointer-events: auto;
 }
 
 .selector select option {
@@ -333,6 +334,8 @@ body {
 .add-subject-section .form-container {
   max-width: 800px;
   /* Wider for subject form */
+  position: relative;
+  z-index: 20;
 }
 
 .form-container h2 {

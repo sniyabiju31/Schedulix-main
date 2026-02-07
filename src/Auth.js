@@ -4,7 +4,7 @@ import { auth, db, rtdb } from "./firebase";
 // Using Realtime Database for signup/login instead of Firebase Auth account creation
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { ref, set as rtdbSet, get as rtdbGet, serverTimestamp as rtdbServerTimestamp, push, query as rtdbQuery, orderByChild, equalTo } from "firebase/database";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail, onAuthStateChanged } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail, onAuthStateChanged, sendPasswordResetEmail } from "firebase/auth";
 
 export default function Auth() {
   const [mode, setMode] = useState("login"); // login, signup, activate
@@ -34,16 +34,26 @@ export default function Auth() {
         // FIRST TIME TEACHER LOGIN
         const { email, employeeId, password } = form;
 
-        // 1. Verify existence in teachers collection
-        const q = query(collection(db, "teachers"), where("email", "==", email), where("employeeId", "==", employeeId));
-        const snap = await getDocs(q);
+        // 1. Verify existence in teachers collection (RTDB)
+        const teachersRef = ref(rtdb, 'teachers');
+        const qEmail = rtdbQuery(teachersRef, orderByChild("email"), equalTo(email));
+        const snapEmail = await rtdbGet(qEmail);
 
-        if (snap.empty) {
-          alert("No teacher found with this Email and Employee ID. Please contact Admin.");
+        if (!snapEmail.exists()) {
+          alert("No teacher found with this Email. Please contact Admin.");
           return;
         }
 
-        const teacherData = snap.docs[0].data();
+        // RTDB queries return a map of matching children. We need to find the one with matching employeeId.
+        const teachersData = snapEmail.val();
+        const teacherKey = Object.keys(teachersData).find(key => teachersData[key].employeeId === employeeId);
+
+        if (!teacherKey) {
+          alert("Employee ID does not match the record for this Email. Please contact Admin.");
+          return;
+        }
+
+        const teacherData = teachersData[teacherKey];
 
         // 2. Create Auth Account
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -229,6 +239,19 @@ export default function Auth() {
     }
   }
 
+  const handleForgotPassword = async () => {
+    if (!form.email) {
+      alert("Please enter your email address first.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, form.email);
+      alert("Password reset email sent! Check your inbox.");
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
+
   return (
     <div className="auth-root">
       <div className="auth-card">
@@ -250,6 +273,7 @@ export default function Auth() {
               Signup
             </button>
           )}
+
 
           {role === "staff" && (
             <button
@@ -295,6 +319,8 @@ export default function Auth() {
             </>
           )}
 
+
+
           {mode === "activate" && (
             <>
               <div className="field">
@@ -335,6 +361,14 @@ export default function Auth() {
                 onChange={onChange}
                 required
               />
+              {mode === "login" && (
+                <span
+                  onClick={handleForgotPassword}
+                  style={{ fontSize: '0.85em', color: '#007bff', cursor: 'pointer', marginTop: '5px', display: 'block' }}
+                >
+                  Forgot Password?
+                </span>
+              )}
             </div>
           )}
 

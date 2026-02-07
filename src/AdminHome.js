@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import "./AdminHome.css";
 import { auth, db, firebaseConfig, rtdb } from "./firebase";
-
-
-import { doc, getDoc, addDoc, collection, getDocs, query, where, updateDoc } from "firebase/firestore";
-import { ref as rtdbRef, get as rtdbGet } from "firebase/database";
+import { initializeApp, deleteApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { doc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, setDoc, serverTimestamp, getFirestore } from "firebase/firestore";
+import { ref as rtdbRef, get as rtdbGet, push, set, update, query as rtdbQuery, orderByChild, equalTo, getDatabase } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { cloudFunctions } from "./firebase";
 
@@ -17,11 +17,11 @@ const departments = ["Computer Science", "Electronics & Communication", "Mechani
 
 const AdminHomePage = () => {
   const [activeMenu, setActiveMenu] = useState("overview");
-  const [selectedClass, setSelectedClass] = useState(classes[0]);
-  const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]);
+  const [selectedDept, setSelectedDept] = useState(departments[0]);
+  const [selectedSemester, setSelectedSemester] = useState("Semester 1");
   const [timetableData, setTimetableData] = useState({});
   const [showForm, setShowForm] = useState(false);
-  const [currentSlot, setCurrentSlot] = useState(null);
+  const [currentSlot, setCurrentSlot] = useState(null); // { day, hour }
   const [subject, setSubject] = useState("");
   const [teacher, setTeacher] = useState("");
   const [room, setRoom] = useState("");
@@ -76,6 +76,72 @@ const AdminHomePage = () => {
     return unsubscribe;
   }, []);
 
+  // Fetch Timetable data for selected Dept/Sem
+  useEffect(() => {
+    if (activeMenu !== 'class-timetable') return;
+    let mounted = true;
+    const fetchTimetable = async () => {
+      try {
+        const timetableRef = rtdbRef(rtdb, `timetables/${selectedDept}/${selectedSemester}`);
+        const snap = await rtdbGet(timetableRef);
+        if (!mounted) return;
+        if (snap.exists()) {
+          setTimetableData(snap.val());
+        } else {
+          setTimetableData({});
+        }
+      } catch (err) {
+        console.error("Fetch timetable error:", err);
+      }
+    };
+    fetchTimetable();
+    return () => { mounted = false; };
+  }, [selectedDept, selectedSemester, activeMenu]);
+
+  // Fetch all teachers for the dropdown in the timetable form
+  useEffect(() => {
+    let mounted = true;
+    const fetchAllTeachers = async () => {
+      try {
+        const teachersRef = rtdbRef(rtdb, 'teachers');
+        const snap = await rtdbGet(teachersRef);
+        if (!mounted) return;
+        if (snap.exists()) {
+          const data = snap.val();
+          const items = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+          setTeachersList(items);
+        }
+      } catch (err) {
+        console.error("Fetch all teachers error:", err);
+      }
+    };
+    fetchAllTeachers();
+    return () => { mounted = false; };
+  }, []);
+
+  // Fetch subjects for the selected Dept/Sem for the timetable dropdown
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  useEffect(() => {
+    let mounted = true;
+    const fetchSubjectsForTimetable = async () => {
+      try {
+        const subjectsRef = rtdbRef(rtdb, 'subjects');
+        const snap = await rtdbGet(subjectsRef); // Simple list here for now
+        if (!mounted) return;
+        if (snap.exists()) {
+          const data = snap.val();
+          const items = Object.keys(data).map(key => ({ id: key, ...data[key] }))
+            .filter(sh => sh.department === selectedDept && sh.semester === selectedSemester);
+          setAvailableSubjects(items);
+        }
+      } catch (err) {
+        console.error("Fetch subjects error:", err);
+      }
+    };
+    fetchSubjectsForTimetable();
+    return () => { mounted = false; };
+  }, [selectedDept, selectedSemester]);
+
   // Fetch users from Realtime Database when 'Users' view is active
   useEffect(() => {
     if (activeMenu !== 'users') return;
@@ -117,6 +183,7 @@ const AdminHomePage = () => {
     return () => { mounted = false; };
   }, [activeMenu]);
 
+
   const handleSignOut = async () => {
     try {
       await auth.signOut();
@@ -134,11 +201,22 @@ const AdminHomePage = () => {
     const fetchSubjects = async () => {
       setLoadingSubjects(true);
       try {
-        const q = query(collection(db, "subjects"), where("semester", "==", semester));
-        const snap = await getDocs(q);
+        const subjectsRef = rtdbRef(rtdb, 'subjects');
+        const q = rtdbQuery(subjectsRef, orderByChild('semester'), equalTo(semester));
+        const snap = await rtdbGet(q);
+
         if (!mounted) return;
-        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setSubjectsList(items);
+
+        if (snap.exists()) {
+          const data = snap.val();
+          const items = Object.keys(data).map(key => ({
+            id: key,
+            ...data[key]
+          }));
+          setSubjectsList(items);
+        } else {
+          setSubjectsList([]);
+        }
       } catch (err) {
         console.error("Fetch subjects error:", err);
         alert(`Fetch subjects error: ${err.message || err}`);
@@ -157,10 +235,21 @@ const AdminHomePage = () => {
     const fetchTeachers = async () => {
       setLoadingTeachers(true);
       try {
-        const q = query(collection(db, "teachers"));
-        const snap = await getDocs(q);
+        const teachersRef = rtdbRef(rtdb, 'teachers');
+        const snap = await rtdbGet(teachersRef);
+
         if (!mounted) return;
-        setTeachersList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        if (snap.exists()) {
+          const data = snap.val();
+          const items = Object.keys(data).map(key => ({
+            id: key,
+            ...data[key]
+          }));
+          setTeachersList(items);
+        } else {
+          setTeachersList([]);
+        }
       } catch (err) {
         console.error("Fetch teachers error:", err);
       } finally {
@@ -178,11 +267,21 @@ const AdminHomePage = () => {
     const fetchPreferences = async () => {
       setLoadingPreferences(true);
       try {
-        const q = query(collection(db, "preferences"));
-        const snap = await getDocs(q);
+        const prefsRef = rtdbRef(rtdb, 'preferences');
+        const snap = await rtdbGet(prefsRef);
+
         if (!mounted) return;
-        const prefs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setPreferencesList(prefs);
+
+        if (snap.exists()) {
+          const data = snap.val();
+          const prefs = Object.keys(data).map(key => ({
+            id: key,
+            ...data[key]
+          }));
+          setPreferencesList(prefs);
+        } else {
+          setPreferencesList([]);
+        }
       } catch (err) {
         console.error("Fetch preferences error:", err);
       } finally {
@@ -200,17 +299,20 @@ const AdminHomePage = () => {
       return;
     }
     try {
-      // Check for duplicates (Email or EmpID)
+      // Check for duplicates (Email or EmpID) using RTDB
       if (!editingTeacherId) {
-        const qEmail = query(collection(db, "teachers"), where("email", "==", teacherEmail));
-        const snapEmail = await getDocs(qEmail);
-        if (!snapEmail.empty) {
+        const teachersRef = rtdbRef(rtdb, 'teachers');
+
+        const qEmail = rtdbQuery(teachersRef, orderByChild("email"), equalTo(teacherEmail));
+        const snapEmail = await rtdbGet(qEmail);
+        if (snapEmail.exists()) {
           alert("A teacher with this email already exists.");
           return;
         }
-        const qEmp = query(collection(db, "teachers"), where("employeeId", "==", teacherEmpId));
-        const snapEmp = await getDocs(qEmp);
-        if (!snapEmp.empty) {
+
+        const qEmp = rtdbQuery(teachersRef, orderByChild("employeeId"), equalTo(teacherEmpId));
+        const snapEmp = await rtdbGet(qEmp);
+        if (snapEmp.exists()) {
           alert("A teacher with this Employee ID already exists.");
           return;
         }
@@ -225,14 +327,55 @@ const AdminHomePage = () => {
       };
 
       if (editingTeacherId) {
-        await updateDoc(doc(db, "teachers", editingTeacherId), teacherData);
-        alert("Teacher updated successfully");
+        const teacherRef = rtdbRef(rtdb, `teachers/${editingTeacherId}`);
+        await update(teacherRef, teacherData);
+        alert("Teacher updated successfully.");
       } else {
-        await addDoc(collection(db, "teachers"), {
+        // 1. Add to RTDB
+        const teachersRef = rtdbRef(rtdb, 'teachers');
+        const newTeacherRef = push(teachersRef);
+        await set(newTeacherRef, {
           ...teacherData,
           createdAt: Date.now()
         });
-        alert("Teacher added successfully");
+
+        // 2. Create Firebase Auth account with default password and send reset email
+        // We use a secondary app instance to avoid logging out the current admin
+        const secondaryApp = initializeApp(firebaseConfig, "secondary");
+        const secondaryAuth = getAuth(secondaryApp);
+
+        try {
+          const userCredential = await createUserWithEmailAndPassword(secondaryAuth, teacherEmail, "12345678");
+          const newUser = userCredential.user;
+
+          // Send reset email
+          await sendPasswordResetEmail(secondaryAuth, teacherEmail);
+
+          // 3. Create Firestore Staff Profile (required for login check)
+          await setDoc(doc(db, "staff", newUser.uid), {
+            name: teacherName,
+            email: teacherEmail,
+            role: "staff",
+            employeeId: teacherEmpId,
+            department: teacherDept,
+            createdAt: serverTimestamp()
+          });
+
+          // 4. Create RTDB User Profile
+          await set(rtdbRef(rtdb, `users/${newUser.uid}`), {
+            name: teacherName,
+            email: teacherEmail,
+            role: "staff",
+            createdAt: Date.now()
+          });
+
+          alert(`Teacher added! Account created with default password '12345678'. A password reset email has been sent to ${teacherEmail}.`);
+        } catch (authErr) {
+          console.error("Auth creation/email error:", authErr);
+          alert(`Teacher added to database, but Auth creation failed: ${authErr.message}`);
+        } finally {
+          await deleteApp(secondaryApp);
+        }
       }
 
       // Reset form
@@ -242,8 +385,18 @@ const AdminHomePage = () => {
       setEditingTeacherId(null);
 
       // Refresh list
-      const snap = await getDocs(collection(db, "teachers"));
-      setTeachersList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const teachersRef = rtdbRef(rtdb, 'teachers');
+      const snap = await rtdbGet(teachersRef);
+      if (snap.exists()) {
+        const data = snap.val();
+        const items = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setTeachersList(items);
+      } else {
+        setTeachersList([]);
+      }
     } catch (err) {
       console.error("Error saving teacher:", err);
       alert("Error saving teacher: " + err.message);
@@ -266,15 +419,19 @@ const AdminHomePage = () => {
       return;
     }
     try {
-      // Check if subject code already exists
-      const qCheck = query(collection(db, "subjects"), where("code", "==", subjectCode.trim()));
-      const snapCheck = await getDocs(qCheck);
-      if (!snapCheck.empty) {
+      // Check if subject code already exists using RTDB
+      const subjectsRef = rtdbRef(rtdb, 'subjects');
+      const qCheck = rtdbQuery(subjectsRef, orderByChild("code"), equalTo(subjectCode.trim()));
+      const snapCheck = await rtdbGet(qCheck);
+
+      if (snapCheck.exists()) {
         alert(`Subject code "${subjectCode.trim()}" already exists. Please use a unique code.`);
         return;
       }
 
-      await addDoc(collection(db, "subjects"), {
+      // Add to RTDB
+      const newSubjectRef = push(subjectsRef);
+      await set(newSubjectRef, {
         semester,
         name: subjectName.trim(),
         code: subjectCode.trim(),
@@ -283,6 +440,7 @@ const AdminHomePage = () => {
         teachingHours: Number(teachingHours) || 0,
         createdAt: Date.now()
       });
+
       alert("Subject added successfully.");
       // Clear fields and refetch
       setSubjectName("");
@@ -290,10 +448,21 @@ const AdminHomePage = () => {
       setDepartment("Computer Science");
       setCredits("");
       setTeachingHours("");
-      // Refresh list
-      const q = query(collection(db, "subjects"), where("semester", "==", semester));
-      const snap = await getDocs(q);
-      setSubjectsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+      // Refresh list (re-fetch)
+      const q = rtdbQuery(subjectsRef, orderByChild('semester'), equalTo(semester));
+      const snap = await rtdbGet(q);
+      if (snap.exists()) {
+        const data = snap.val();
+        const items = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setSubjectsList(items);
+      } else {
+        setSubjectsList([]);
+      }
+
     } catch (err) {
       console.error("Add subject error:", err);
       alert(`Add subject error: ${err.message || err}`);
@@ -301,35 +470,52 @@ const AdminHomePage = () => {
   };
 
   const handleSlotClick = (day, hour) => {
-    const key = `${selectedClass}-${day}-${hour}`;
-    const existingClass = timetableData[key];
-    if (existingClass) {
-      setSubject(existingClass.subject);
-      setTeacher(existingClass.teacher);
-      setRoom(existingClass.room);
+    const existingSlot = timetableData[day] ? timetableData[day][hour] : null;
+    if (existingSlot) {
+      setSubject(existingSlot.subject);
+      setTeacher(existingSlot.teacherEmpId); // Store ID/EmpID
+      setRoom(existingSlot.room);
     } else {
       setSubject("");
       setTeacher("");
       setRoom("");
     }
-    setCurrentSlot(key);
+    setCurrentSlot({ day, hour });
     setShowForm(true);
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
-    const newTimetable = { ...timetableData };
-    if (subject || teacher || room) {
-      newTimetable[currentSlot] = { subject, teacher, room };
-    } else {
-      delete newTimetable[currentSlot];
+    try {
+      const { day, hour } = currentSlot;
+      const timetableRef = rtdbRef(rtdb, `timetables/${selectedDept}/${selectedSemester}/${day}/${hour}`);
+
+      if (!subject) {
+        // Delete slot if subject is cleared
+        await set(timetableRef, null);
+      } else {
+        const teacherObj = teachersList.find(t => t.employeeId === teacher);
+        await set(timetableRef, {
+          subject,
+          teacherEmpId: teacher,
+          teacherName: teacherObj ? teacherObj.name : teacher,
+          room,
+          department: selectedDept,
+          semester: selectedSemester,
+          updatedAt: Date.now()
+        });
+      }
+
+      // Refresh timetable data
+      const updatedSnap = await rtdbGet(rtdbRef(rtdb, `timetables/${selectedDept}/${selectedSemester}`));
+      setTimetableData(updatedSnap.exists() ? updatedSnap.val() : {});
+
+      setShowForm(false);
+      setCurrentSlot(null);
+    } catch (err) {
+      console.error("Save timetable error:", err);
+      alert("Error saving timetable slot: " + err.message);
     }
-    setTimetableData(newTimetable);
-    setShowForm(false);
-    setCurrentSlot(null);
-    setSubject("");
-    setTeacher("");
-    setRoom("");
   };
 
   const handleCancel = () => {
@@ -438,31 +624,28 @@ const AdminHomePage = () => {
             <h1>{activeMenu === "class-timetable" ? "Class Timetables" : "Teacher Timetables"}</h1>
 
             <div className="selector-section">
-              {activeMenu === "class-timetable" ? (
-                <div className="selector">
-                  <label>Select Class:</label>
-                  <select
-                    value={selectedClass}
-                    onChange={(e) => setSelectedClass(e.target.value)}
-                  >
-                    {classes.map((cls) => (
-                      <option key={cls} value={cls}>{cls}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div className="selector">
-                  <label>Select Teacher:</label>
-                  <select
-                    value={selectedTeacher}
-                    onChange={(e) => setSelectedTeacher(e.target.value)}
-                  >
-                    {teachers.map((teacher) => (
-                      <option key={teacher} value={teacher}>{teacher}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div className="selector">
+                <label>Department:</label>
+                <select
+                  value={selectedDept}
+                  onChange={(e) => setSelectedDept(e.target.value)}
+                >
+                  {departments.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="selector">
+                <label>Semester:</label>
+                <select
+                  value={selectedSemester}
+                  onChange={(e) => setSelectedSemester(e.target.value)}
+                >
+                  {Array.from({ length: 8 }, (_, i) => `Semester ${i + 1}`).map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Users list view */}
@@ -507,20 +690,17 @@ const AdminHomePage = () => {
                   <tr key={hour}>
                     <td>{hour}</td>
                     {days.map((day) => {
-                      const key = activeMenu === "class-timetable"
-                        ? `${selectedClass}-${day}-${hour}`
-                        : `${selectedTeacher}-${day}-${hour}`;
-                      const classInfo = timetableData[key];
+                      const classInfo = timetableData[day] ? timetableData[day][hour] : null;
                       return (
                         <td
-                          key={key}
+                          key={`${day}-${hour}`}
                           onClick={() => handleSlotClick(day, hour)}
                           className="timetable-cell"
                         >
                           {classInfo ? (
                             <div className="class-info">
                               <div className="subject">{classInfo.subject}</div>
-                              <div className="teacher">{classInfo.teacher}</div>
+                              <div className="teacher">{classInfo.teacherName}</div>
                               <div className="room">{classInfo.room}</div>
                             </div>
                           ) : (
@@ -541,21 +721,29 @@ const AdminHomePage = () => {
                   <form onSubmit={handleFormSubmit}>
                     <div className="form-group">
                       <label>Subject:</label>
-                      <input
-                        type="text"
+                      <select
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
-                        placeholder="Enter subject"
-                      />
+                        required
+                      >
+                        <option value="">Select Subject</option>
+                        {availableSubjects.map(s => (
+                          <option key={s.id} value={s.name}>{s.name} ({s.code})</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="form-group">
                       <label>Teacher:</label>
-                      <input
-                        type="text"
+                      <select
                         value={teacher}
                         onChange={(e) => setTeacher(e.target.value)}
-                        placeholder="Enter teacher"
-                      />
+                        required
+                      >
+                        <option value="">Select Teacher</option>
+                        {teachersList.map(t => (
+                          <option key={t.id} value={t.employeeId}>{t.name} ({t.employeeId})</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="form-group">
                       <label>Room:</label>
@@ -767,6 +955,27 @@ const AdminHomePage = () => {
           </div>
         )}
 
+        <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '20px' }}>
+          <h3>Debug Tools</h3>
+          <button onClick={async () => {
+            try {
+              const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
+              await set(timetablesRef, {
+                subject: "Introduction to CS",
+                teacherEmpId: "T-123", // Matches our test case
+                teacherName: "Test Teacher",
+                room: "101",
+                department: "Computer Science",
+                semester: "Semester 1"
+              });
+              alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
+            } catch (e) {
+              alert("Error seeding: " + e.message);
+            }
+          }} style={{ background: 'orange', color: 'white', padding: '10px' }}>
+            Seed Timetable Data
+          </button>
+        </div>
       </main>
     </div>
   );

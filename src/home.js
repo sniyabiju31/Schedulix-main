@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "./home.css";
-import { auth, db, firebaseConfig } from "./firebase";
-import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { auth, rtdb, firebaseConfig } from "./firebase";
+import { ref, get, set, push, serverTimestamp } from "firebase/database";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
@@ -33,12 +33,13 @@ const StaffHomePage = () => {
     if (!user) return;
     setLoadingPref(true);
     try {
-      await addDoc(collection(db, "preferences"), {
+      const newPrefRef = push(ref(rtdb, "preferences"));
+      await set(newPrefRef, {
         ...prefForm,
         teacherUid: auth.currentUser.uid,
-        teacherEmpId: user.employeeId,
-        teacherName: user.name,
-        teacherEmail: user.email,
+        teacherEmpId: user.employeeId || '',
+        teacherName: user.name || '',
+        teacherEmail: user.email || '',
         createdAt: serverTimestamp()
       });
       alert("Preferences submitted successfully!");
@@ -52,7 +53,7 @@ const StaffHomePage = () => {
         classPref2: "",
         classPref3: ""
       });
-      setActiveMenu("timetable"); // Go back to timetable or stay
+      setActiveMenu("timetable");
     } catch (error) {
       console.error("Error submitting preferences:", error);
       alert("Error submitting preferences: " + error.message);
@@ -65,20 +66,27 @@ const StaffHomePage = () => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       try {
         if (user) {
-          const docRef = doc(db, "staff", user.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setUser(docSnap.data());
+          // Fetch from RTDB 'staffs' node
+          const staffRef = ref(rtdb, `staffs/${user.uid}`);
+          const snapshot = await get(staffRef);
+          if (snapshot.exists()) {
+            setUser(snapshot.val());
           } else {
-            console.warn("Staff document not found for user:", user.uid);
-            setUser(null);
+            // Fallback to check 'users' node if not in staffs
+            const userRef = ref(rtdb, `users/${user.uid}`);
+            const userSnap = await get(userRef);
+            if (userSnap.exists()) {
+              setUser(userSnap.val());
+            } else {
+              console.warn("Staff profile not found for user:", user.uid);
+              setUser(null);
+            }
           }
         } else {
           setUser(null);
         }
       } catch (error) {
         console.error("Auth onAuthStateChanged error (staff):", error);
-        alert(`${error.code || "auth/error"}: ${error.message}`);
       }
     });
     return unsubscribe;
@@ -92,6 +100,73 @@ const StaffHomePage = () => {
       console.error("Sign out error:", error);
       alert(`${error.code || "auth/error"}: ${error.message}`);
     }
+  };
+
+  // Timetable State
+  const [timetable, setTimetable] = useState({});
+  const [loadingTimetable, setLoadingTimetable] = useState(false);
+
+  useEffect(() => {
+    if (!user || activeMenu !== 'timetable') return;
+
+    const fetchTimetable = async () => {
+      setLoadingTimetable(true);
+      try {
+        // We need to fetch all timetables and filter for this teacher
+        // Structure: timetables/{department}/{semester}/{day}/{hour} -> { subject, teacherEmpId, room ... }
+        // Since we don't know exactly which dept/sem the teacher is in (they could be in multiple), we might need to fetch root or query by index if possible.
+        // For now, fetching root 'timetables' and client-side filtering. 
+        // In a production app with huge data, we'd use an index like classes_by_teacher/{teacherId}
+
+        const timetablesRef = ref(rtdb, 'timetables');
+        const snapshot = await get(timetablesRef);
+
+        if (snapshot.exists()) {
+          const allData = snapshot.val();
+          const mySchedule = {}; // Key: "Day-Time" (e.g., "Monday-8AM") -> value: { subject, room, dept, sem }
+
+          // Iterate Departments
+          Object.keys(allData).forEach(dept => {
+            const deptData = allData[dept];
+            // Iterate Semesters
+            Object.keys(deptData).forEach(sem => {
+              const semData = deptData[sem];
+              // Iterate Days
+              Object.keys(semData).forEach(day => {
+                const dayData = semData[day];
+                // Iterate Hours
+                Object.keys(dayData).forEach(hour => {
+                  const slot = dayData[hour];
+                  // Check if this slot belongs to the current teacher
+                  if (slot && slot.teacherEmpId === user.employeeId) {
+                    mySchedule[`${day}-${hour}`] = {
+                      ...slot,
+                      department: dept,
+                      semester: sem
+                    };
+                  }
+                });
+              });
+            });
+          });
+          setTimetable(mySchedule);
+        } else {
+          setTimetable({});
+        }
+
+      } catch (error) {
+        console.error("Error fetching timetable:", error);
+      } finally {
+        setLoadingTimetable(false);
+      }
+    };
+
+    fetchTimetable();
+  }, [user, activeMenu]);
+
+  const getSlot = (day, hour) => {
+    const key = `${day}-${hour}`;
+    return timetable[key];
   };
 
   return (
@@ -130,18 +205,6 @@ const StaffHomePage = () => {
         <button onClick={handleSignOut} className="sign-out-btn">
           Sign Out
         </button>
-        {process.env.NODE_ENV !== 'production' && (
-          <button
-            onClick={() => {
-              console.log('auth.currentUser:', auth.currentUser);
-              console.log('firebaseConfig:', firebaseConfig);
-              alert('Debug info logged to console');
-            }}
-            className="debug-btn"
-          >
-            Debug Info
-          </button>
-        )}
       </aside>
 
       {/* Main Content */}
@@ -179,31 +242,44 @@ const StaffHomePage = () => {
         {activeMenu === "timetable" && (
           <div className="home-container">
             <h1>My Teaching Timetable</h1>
-            <table className="timetable">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  {days.map((day) => (
-                    <th key={day}>{day}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {hours.map((hour) => (
-                  <tr key={hour}>
-                    <td>{hour}</td>
+            {loadingTimetable ? <p>Loading schedule...</p> : (
+              <table className="timetable">
+                <thead>
+                  <tr>
+                    <th>Time</th>
                     {days.map((day) => (
-                      <td
-                        key={day + hour}
-                        onClick={() => alert(`Class: ${day} at ${hour}`)}
-                      >
-                        <span className="slot"></span>
-                      </td>
+                      <th key={day}>{day}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {hours.map((hour) => (
+                    <tr key={hour}>
+                      <td>{hour}</td>
+                      {days.map((day) => {
+                        const slot = getSlot(day, hour);
+                        return (
+                          <td
+                            key={day + hour}
+                            className={slot ? "has-class" : ""}
+                            onClick={() => slot && alert(`Class: ${slot.subject}\nDept: ${slot.department}\nSem: ${slot.semester}`)}
+                          >
+                            {slot ? (
+                              <div className="slot-info">
+                                <span className="subject">{slot.subject}</span>
+                                <span className="details">{slot.semester} - {slot.department}</span>
+                              </div>
+                            ) : (
+                              <span className="slot"></span>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
