@@ -188,6 +188,8 @@ export default function Auth() {
                 role: "staff",
                 employeeId: teacherData.employeeId,
                 department: teacherData.department,
+                isTutor: teacherData.isTutor || false,
+                tutorClass: teacherData.tutorClass || "",
                 createdAt: serverTimestamp(),
                 activatedAt: serverTimestamp()
               });
@@ -196,6 +198,8 @@ export default function Auth() {
                 name: teacherData.name,
                 email: teacherData.email,
                 role: "staff",
+                isTutor: teacherData.isTutor || false,
+                tutorClass: teacherData.tutorClass || "",
                 createdAt: rtdbServerTimestamp(),
               };
 

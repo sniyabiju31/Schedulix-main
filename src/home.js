@@ -68,21 +68,69 @@ const StaffHomePage = () => {
       try {
         if (user) {
           // Fetch from RTDB 'staffs' node
+          let finalUser = null;
           const staffRef = ref(rtdb, `staffs/${user.uid}`);
           const snapshot = await get(staffRef);
           if (snapshot.exists()) {
-            setUser(snapshot.val());
+            finalUser = snapshot.val();
           } else {
             // Fallback to check 'users' node if not in staffs
             const userRef = ref(rtdb, `users/${user.uid}`);
             const userSnap = await get(userRef);
             if (userSnap.exists()) {
-              setUser(userSnap.val());
+              finalUser = userSnap.val();
             } else {
               console.warn("Staff profile not found for user:", user.uid);
-              setUser(null);
+              finalUser = null;
             }
           }
+
+          // Secondary Fetch: Get definitive Tutor status from 'teachers' node
+          // This fixes issues where the staff profile might be out of sync
+          // Use auth email as fallback if DB profile is missing email
+          if ((finalUser && finalUser.email) || user.email) {
+            try {
+              const teachersRef = ref(rtdb, 'teachers');
+              const snapshot = await get(teachersRef);
+              if (snapshot.exists()) {
+                const allTeachers = snapshot.val();
+                const searchEmail = (finalUser && finalUser.email) || user.email;
+                if (!searchEmail) {
+                  console.warn("No email found to search teachers.");
+                } else {
+                  // Find teacher record by email (case-insensitive)
+                  const teacherRecord = Object.values(allTeachers).find(t =>
+                    t.email && t.email.toLowerCase().trim() === searchEmail.toLowerCase().trim()
+                  );
+
+                  if (teacherRecord) {
+                    // Merge definitive tutor status
+                    finalUser = {
+                      ...finalUser,
+                      isTutor: teacherRecord.isTutor || false,
+                      tutorClass: teacherRecord.tutorClass || "",
+                      // also sync other fields if missing
+                      department: finalUser.department || teacherRecord.department,
+                      employeeId: finalUser.employeeId || teacherRecord.employeeId,
+                      email: finalUser.email || teacherRecord.email
+                    };
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Error fetching teacher record:", err);
+            }
+          }
+
+          // If finalUser is found/merged, ensure the email is set from the Auth User object
+          // This guarantees it is never empty if the user is authenticated.
+          if (finalUser) {
+            finalUser.email = finalUser.email || user.email;
+            // Also ensure name fallback if DB is partial
+            finalUser.name = finalUser.name || user.displayName || "Staff Member";
+          }
+
+          setUser(finalUser);
         } else {
           setUser(null);
         }
@@ -236,6 +284,16 @@ const StaffHomePage = () => {
                   <label>Employee ID:</label>
                   <span>{user ? user.employeeId : "N/A"}</span>
                 </div>
+                <div className="info-item">
+                  <label>Tutor Status:</label>
+                  <span>{user ? ((user.isTutor === true || user.isTutor === "true") ? "Yes" : "No") : "N/A"}</span>
+                </div>
+                {user && (user.isTutor === true || user.isTutor === "true") && (
+                  <div className="info-item">
+                    <label>Assigned Class:</label>
+                    <span>{user.tutorClass || "N/A"}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -2,8 +2,8 @@
   "rules": {
     "users": {
       "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid",
+        ".read": "auth != null",
+        ".write": "auth != null",
         ".validate": "newData.hasChildren(['email','name','role','createdAt']) && newData.child('email').isString() && newData.child('name').isString() && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'staff')"
       }
     },
@@ -14,10 +14,11 @@
       }
     },
     "staffs": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": false
-      }
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "email"
+      ]
     },
     "test_connection": {
       "$uid": {
