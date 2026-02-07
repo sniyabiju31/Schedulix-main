@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "./home.css";
-import { auth, rtdb, firebaseConfig } from "./firebase";
+import { auth, db, rtdb, firebaseConfig } from "./firebase";
 import { ref, get, set, push, serverTimestamp } from "firebase/database";
-import { auth, db } from "./firebase";
-import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { User, Calendar, FileText, Star } from "lucide-react";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];

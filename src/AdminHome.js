@@ -1,17 +1,11 @@
 import React, { useState, useEffect } from "react";
 import "./AdminHome.css";
-import { auth, db, firebaseConfig, rtdb } from "./firebase";
+import { auth, db, firebaseConfig, rtdb, cloudFunctions } from "./firebase";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, setDoc, serverTimestamp, getFirestore } from "firebase/firestore";
 import { ref as rtdbRef, get as rtdbGet, push, set, update, query as rtdbQuery, orderByChild, equalTo, getDatabase } from "firebase/database";
-import { auth, db, rtdb } from "./firebase";
-
-
-import { doc, getDoc, addDoc, collection, getDocs, query, where, updateDoc } from "firebase/firestore";
-import { ref as rtdbRef, get as rtdbGet } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
-import { cloudFunctions } from "./firebase";
 import { LayoutDashboard, ClipboardList, Calendar, Clock, PlusCircle, GraduationCap, Users } from "lucide-react";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
@@ -375,10 +369,24 @@ const AdminHomePage = () => {
             createdAt: Date.now()
           });
 
+          // 5. Also add to staffs/ node for role-specific lookups
+          await set(rtdbRef(rtdb, `staffs/${newUser.uid}`), {
+            name: teacherName,
+            email: teacherEmail,
+            role: "staff",
+            createdAt: Date.now()
+          });
+
           alert(`Teacher added! Account created with default password '12345678'. A password reset email has been sent to ${teacherEmail}.`);
         } catch (authErr) {
-          console.error("Auth creation/email error:", authErr);
-          alert(`Teacher added to database, but Auth creation failed: ${authErr.message}`);
+          if (authErr.code === 'auth/email-already-in-use') {
+            // Send reset email even if user exists
+            await sendPasswordResetEmail(secondaryAuth, teacherEmail);
+            alert(`Teacher data saved. This email is already registered in Firebase. A password reset email has been sent to ${teacherEmail}. They can use the 'First Time Login' flow to activate.`);
+          } else {
+            console.error("Auth creation/email error:", authErr);
+            alert(`Teacher added to database, but Auth creation failed: ${authErr.message}`);
+          }
         } finally {
           await deleteApp(secondaryApp);
         }
