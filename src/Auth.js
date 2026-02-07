@@ -18,10 +18,11 @@ export default function Auth() {
   });
 
   function onChange(e) {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setForm(prev => ({
+      ...prev,
+      [name]: value,
+    }));
   }
 
   async function handleSubmit(e) {
@@ -55,32 +56,65 @@ export default function Auth() {
 
         const teacherData = teachersData[teacherKey];
 
-        // 2. Create Auth Account
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
+        try {
+          // 2. Create Auth Account
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          const user = userCredential.user;
 
-        // 3. Create Staff Profile (so they can login as staff)
-        await setDoc(doc(db, "staff", user.uid), {
-          name: teacherData.name,
-          email: teacherData.email,
-          role: "staff",
-          employeeId: teacherData.employeeId,
-          department: teacherData.department,
-          createdAt: serverTimestamp(),
-          activatedAt: serverTimestamp()
-        });
+          // 3. Create Staff Profile (so they can login as staff)
+          await setDoc(doc(db, "staff", user.uid), {
+            name: teacherData.name,
+            email: teacherData.email,
+            role: "staff",
+            employeeId: teacherData.employeeId,
+            department: teacherData.department,
+            createdAt: serverTimestamp(),
+            activatedAt: serverTimestamp()
+          });
 
-        // 4. Also user profile in RTDB for consistency
-        await rtdbSet(ref(rtdb, `users/${user.uid}`), {
-          name: teacherData.name,
-          email: teacherData.email,
-          role: "staff",
-          createdAt: rtdbServerTimestamp(),
-        });
+          // 4. Also user profile in RTDB for consistency
+          await rtdbSet(ref(rtdb, `users/${user.uid}`), {
+            name: teacherData.name,
+            email: teacherData.email,
+            role: "staff",
+            createdAt: rtdbServerTimestamp(),
+          });
 
-        alert("Account activated successfully! You can now login as Staff.");
-        setMode("login");
-        setRole("staff");
+          alert("Account activated successfully! You can now login as Staff.");
+          setMode("login");
+          setRole("staff");
+        } catch (authErr) {
+          if (authErr.code === 'auth/email-already-in-use') {
+            // If email exists, they might have been pre-created or already reset password.
+            // Try to sign in instead.
+            console.log("Email already in use, attempting to sign in instead for activation.");
+            await signInWithEmailAndPassword(auth, email, password);
+            const user = auth.currentUser;
+
+            // Ensure profiles exist even if they were stuck
+            await setDoc(doc(db, "staff", user.uid), {
+              name: teacherData.name,
+              email: teacherData.email,
+              role: "staff",
+              employeeId: teacherData.employeeId,
+              department: teacherData.department,
+              updatedAt: serverTimestamp(),
+              activatedAt: serverTimestamp()
+            }, { merge: true });
+
+            await rtdbSet(ref(rtdb, `users/${user.uid}`), {
+              name: teacherData.name,
+              email: teacherData.email,
+              role: "staff",
+              updatedAt: rtdbServerTimestamp(),
+            });
+
+            alert("Account activation confirmed! Logging you in...");
+            window.location.href = "/staff-home";
+          } else {
+            throw authErr;
+          }
+        }
 
       } else if (mode === "signup") {
         // Prevent creating a new account when the email is already registered
@@ -202,30 +236,69 @@ export default function Auth() {
         await signInWithEmailAndPassword(auth, email, password);
         const user = auth.currentUser;
         if (user) {
-          const userRole = role;
-          const docRef = doc(db, userRole, user.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            alert(`${role} login successful ✅`);
-            window.location.href = userRole === "admin" ? "/admin-home" : "/staff-home";
-          } else {
-            // If Firestore doesn't have the role document, check Realtime Database
-            const rtdbUserSnap = await rtdbGet(ref(rtdb, `users/${user.uid}`));
-            const roleNodeSnap = await rtdbGet(ref(rtdb, `${userRole}s/${user.uid}`));
+          // AUTO ROLE DETECTION: Check selected role first, then fallback
+          const checkRole = async (r) => {
+            const docRef = doc(db, r, user.uid);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) return true;
 
-            if (rtdbUserSnap.exists()) {
-              const rtdbUser = rtdbUserSnap.val();
-              if (rtdbUser.role === userRole) {
-                alert(`${role} login successful via RTDB ✅`);
-                window.location.href = userRole === "admin" ? "/admin-home" : "/staff-home";
-              } else {
-                alert(`You are not authorized as a ${role} ❌`);
-              }
-            } else if (roleNodeSnap.exists()) {
-              alert(`${role} login successful via RTDB (${userRole} node) ✅`);
-              window.location.href = userRole === "admin" ? "/admin-home" : "/staff-home";
+            const rtdbUserSnap = await rtdbGet(ref(rtdb, `users/${user.uid}`));
+            if (rtdbUserSnap.exists() && rtdbUserSnap.val().role === r) return true;
+
+            const roleNodeSnap = await rtdbGet(ref(rtdb, `${r}s/${user.uid}`));
+            return roleNodeSnap.exists();
+          };
+
+          const isAuthorized = await checkRole(role);
+          const otherRole = role === "admin" ? "staff" : "admin";
+
+          if (isAuthorized) {
+            alert(`${role} login successful ✅`);
+            window.location.href = role === "admin" ? "/admin-home" : "/staff-home";
+          } else if (await checkRole(otherRole)) {
+            alert(`Logged in as ${otherRole} (you selected ${role}) ✅`);
+            window.location.href = otherRole === "admin" ? "/admin-home" : "/staff-home";
+          } else {
+            // AUTO-ACTIVATION: Check if they are in the teachers/ list but profiles are missing
+            console.log("Checking for auto-activation...");
+            const teachersRef = ref(rtdb, 'teachers');
+            const q = rtdbQuery(teachersRef, orderByChild("email"), equalTo(email));
+            const snap = await rtdbGet(q);
+
+            if (snap.exists()) {
+              const teachersData = snap.val();
+              const teacherKey = Object.keys(teachersData)[0];
+              const teacherData = teachersData[teacherKey];
+
+              console.log("Auto-activating teacher profiles...");
+              // Create Firestore Staff Profile
+              await setDoc(doc(db, "staff", user.uid), {
+                name: teacherData.name,
+                email: teacherData.email,
+                role: "staff",
+                employeeId: teacherData.employeeId,
+                department: teacherData.department,
+                createdAt: serverTimestamp(),
+                activatedAt: serverTimestamp()
+              });
+
+              const userData = {
+                name: teacherData.name,
+                email: teacherData.email,
+                role: "staff",
+                createdAt: rtdbServerTimestamp(),
+              };
+
+              // Create RTDB User Profile
+              await rtdbSet(ref(rtdb, `users/${user.uid}`), userData);
+              // Create RTDB Role-specific Profile
+              await rtdbSet(ref(rtdb, `staffs/${user.uid}`), userData);
+
+              alert("Your account has been automatically activated. Welcome!");
+              window.location.href = "/staff-home";
             } else {
-              alert(`You are not authorized as a ${role} ❌`);
+              alert(`You are not authorized as a ${role} or ${otherRole} ❌`);
+              await auth.signOut();
             }
           }
         }
@@ -309,17 +382,39 @@ export default function Auth() {
             <>
               <div className="field">
                 <label>Name</label>
-                <input name="name" value={form.name} onChange={onChange} />
+                <input name="name" value={form.name} onChange={onChange} required placeholder="Full Name" />
               </div>
 
               <div className="field">
                 <label>Username</label>
-                <input name="username" value={form.username} onChange={onChange} />
+                <input name="username" value={form.username} onChange={onChange} required placeholder="Choose a username" />
+              </div>
+
+              <div className="field">
+                <label>Email</label>
+                <input
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={onChange}
+                  required
+                  placeholder="email@example.com"
+                />
+              </div>
+
+              <div className="field">
+                <label>Password</label>
+                <input
+                  name="password"
+                  type="password"
+                  value={form.password}
+                  onChange={onChange}
+                  required
+                  placeholder="Minimum 6 characters"
+                />
               </div>
             </>
           )}
-
-
 
           {mode === "activate" && (
             <>
@@ -338,38 +433,39 @@ export default function Auth() {
             </>
           )}
 
-          {mode !== "activate" && (
-            <div className="field">
-              <label>Email</label>
-              <input
-                name="email"
-                type="email"
-                value={form.email}
-                onChange={onChange}
-                required
-              />
-            </div>
-          )}
+          {mode === "login" && (
+            <>
+              <div className="field">
+                <label>Email</label>
+                <input
+                  key="login-email"
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={onChange}
+                  required
+                  autoFocus
+                />
+              </div>
 
-          {mode !== "activate" && (
-            <div className="field">
-              <label>Password</label>
-              <input
-                name="password"
-                type="password"
-                value={form.password}
-                onChange={onChange}
-                required
-              />
-              {mode === "login" && (
+              <div className="field">
+                <label>Password</label>
+                <input
+                  key="login-password"
+                  name="password"
+                  type="password"
+                  value={form.password}
+                  onChange={onChange}
+                  required
+                />
                 <span
                   onClick={handleForgotPassword}
                   style={{ fontSize: '0.85em', color: '#007bff', cursor: 'pointer', marginTop: '5px', display: 'block' }}
                 >
                   Forgot Password?
                 </span>
-              )}
-            </div>
+              </div>
+            </>
           )}
 
           <button type="submit" className="submit">

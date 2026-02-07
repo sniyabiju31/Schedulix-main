@@ -15,12 +15,12 @@ service cloud.firestore {
 
     // FIXED: Allow users to read AND WRITE their own admin profile (needed for signup)
     match /admin/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
     }
 
     // NEW: Allow users to read AND WRITE their own staff profile (needed for signup/login as staff)
     match /staff/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
     }
 
     // Rules for Teachers collection (Managed by Admin)
