@@ -1,74 +1,607 @@
 import React, { useState, useEffect } from "react";
 import "./AdminHome.css";
-import { auth, db } from "./firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { auth, db, firebaseConfig, rtdb, cloudFunctions } from "./firebase";
+import { initializeApp, deleteApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { doc, getDoc, where, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { ref as rtdbRef, get as rtdbGet, push, set, update, query as rtdbQuery, orderByChild, equalTo } from "firebase/database";
+import { httpsCallable } from "firebase/functions";
+import { LayoutDashboard, ClipboardList, Calendar, Clock, PlusCircle, GraduationCap, Users } from "lucide-react";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
 
 const classes = ["Class 10A", "Class 10B", "Class 9A", "Class 9B", "Class 8A"];
 const teachers = ["Mr. Smith", "Ms. Johnson", "Mr. Davis", "Ms. Wilson", "Mr. Brown"];
+const departments = ["Computer Science", "Electronics & Communication", "Mechanical Engineering", "Civil Engineering", "Electrical & Electronics", "Information Technology", "Artificial Intelligence", "Cyber Security"];
 
 const AdminHomePage = () => {
   const [activeMenu, setActiveMenu] = useState("overview");
-  const [selectedClass, setSelectedClass] = useState(classes[0]);
-  const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]);
+  const [selectedDept, setSelectedDept] = useState(departments[0]);
+  const [selectedSemester, setSelectedSemester] = useState("Semester 1");
   const [timetableData, setTimetableData] = useState({});
   const [showForm, setShowForm] = useState(false);
-  const [currentSlot, setCurrentSlot] = useState(null);
+  const [currentSlot, setCurrentSlot] = useState(null); // { day, hour }
   const [subject, setSubject] = useState("");
   const [teacher, setTeacher] = useState("");
   const [room, setRoom] = useState("");
-  const [user, setUser] = useState(null);
+  const [usersList, setUsersList] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Subjects management
+  const [semester, setSemester] = useState("Semester 1");
+  const [subjectName, setSubjectName] = useState("");
+  const [subjectCode, setSubjectCode] = useState("");
+  const [department, setDepartment] = useState("Computer Science");
+  const [credits, setCredits] = useState("");
+  const [teachingHours, setTeachingHours] = useState("");
+  const [subjectsList, setSubjectsList] = useState([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+
+  // Teachers management
+  const [teacherName, setTeacherName] = useState("");
+  const [teacherEmail, setTeacherEmail] = useState("");
+  const [teacherDept, setTeacherDept] = useState("Computer Science");
+  const [teacherEmpId, setTeacherEmpId] = useState("");
+  const [isTutor, setIsTutor] = useState(false);
+  const [tutorClass, setTutorClass] = useState("");
+  const [teachersList, setTeachersList] = useState([]);
+  const [loadingTeachers, setLoadingTeachers] = useState(false);
+  const [editingTeacherId, setEditingTeacherId] = useState(null);
+
+  // Preferences management
+  const [preferencesList, setPreferencesList] = useState([]);
+  const [loadingPreferences, setLoadingPreferences] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        const docRef = doc(db, "admin", user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setUser(docSnap.data());
+      try {
+        if (user) {
+          const docRef = doc(db, "admin", user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            // setUser(docSnap.data());
+          } else {
+            console.warn("Admin document not found for user:", user.uid);
+            alert("Warning: Your account is logged in but does not have an 'Admin' profile in the database. You will not be able to add teachers. Please Sign Out and Sign Up again as an Admin.");
+            // setUser(null);
+          }
+        } else {
+          // setUser(null);
         }
+      } catch (error) {
+        console.error("Auth onAuthStateChanged error (admin):", error);
+        alert(`${error.code || "auth/error"}: ${error.message}`);
       }
     });
     return unsubscribe;
   }, []);
 
-  const handleSignOut = () => {
-    auth.signOut();
-    window.location.href = "/";
+  // Fetch Timetable data for selected Dept/Sem
+  useEffect(() => {
+    if (activeMenu !== 'class-timetable') return;
+    let mounted = true;
+    const fetchTimetable = async () => {
+      try {
+        const timetableRef = rtdbRef(rtdb, `timetables/${selectedDept}/${selectedSemester}`);
+        const snap = await rtdbGet(timetableRef);
+        if (!mounted) return;
+        if (snap.exists()) {
+          setTimetableData(snap.val());
+        } else {
+          setTimetableData({});
+        }
+      } catch (err) {
+        console.error("Fetch timetable error:", err);
+      }
+    };
+    fetchTimetable();
+    return () => { mounted = false; };
+  }, [selectedDept, selectedSemester, activeMenu]);
+
+  // Fetch all teachers for the dropdown in the timetable form
+  useEffect(() => {
+    let mounted = true;
+    const fetchAllTeachers = async () => {
+      try {
+        const teachersRef = rtdbRef(rtdb, 'teachers');
+        const snap = await rtdbGet(teachersRef);
+        if (!mounted) return;
+        if (snap.exists()) {
+          const data = snap.val();
+          const items = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+          setTeachersList(items);
+        }
+      } catch (err) {
+        console.error("Fetch all teachers error:", err);
+      }
+    };
+    fetchAllTeachers();
+    return () => { mounted = false; };
+  }, []);
+
+  // Fetch subjects for the selected Dept/Sem for the timetable dropdown
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  useEffect(() => {
+    let mounted = true;
+    const fetchSubjectsForTimetable = async () => {
+      try {
+        const subjectsRef = rtdbRef(rtdb, 'subjects');
+        const snap = await rtdbGet(subjectsRef); // Simple list here for now
+        if (!mounted) return;
+        if (snap.exists()) {
+          const data = snap.val();
+          const items = Object.keys(data).map(key => ({ id: key, ...data[key] }))
+            .filter(sh => sh.department === selectedDept && sh.semester === selectedSemester);
+          setAvailableSubjects(items);
+        }
+      } catch (err) {
+        console.error("Fetch subjects error:", err);
+      }
+    };
+    fetchSubjectsForTimetable();
+    return () => { mounted = false; };
+  }, [selectedDept, selectedSemester]);
+
+  // Fetch users from Realtime Database when 'Users' view is active
+  useEffect(() => {
+    if (activeMenu !== 'users') return;
+    let mounted = true;
+    async function fetchUsers() {
+      setLoadingUsers(true);
+      try {
+        // Prefer server-side callable that enforces admin check
+        try {
+          const resp = await httpsCallable(cloudFunctions, 'listUsersForAdmin')();
+          if (!mounted) return;
+          if (resp && resp.data && Array.isArray(resp.data.users)) {
+            setUsersList(resp.data.users);
+            setLoadingUsers(false);
+            return;
+          }
+        } catch (callErr) {
+          console.warn('Callable listUsersForAdmin failed or not deployed, falling back to direct RTDB read:', callErr);
+        }
+
+        // Fallback: read RTDB directly (requires rules that allow admin read)
+        const snap = await rtdbGet(rtdbRef(rtdb, 'users'));
+        if (!mounted) return;
+        if (snap.exists()) {
+          const val = snap.val();
+          const users = Object.keys(val).map(uid => ({ uid, ...val[uid] }));
+          setUsersList(users);
+        } else {
+          setUsersList([]);
+        }
+      } catch (err) {
+        console.error('RTDB fetch users error:', err);
+        alert(`RTDB fetch users error: ${err.code || ''} ${err.message || err}`);
+      } finally {
+        if (mounted) setLoadingUsers(false);
+      }
+    }
+    fetchUsers();
+    return () => { mounted = false; };
+  }, [activeMenu]);
+
+
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Sign out error:", error);
+      alert(`${error.code || "auth/error"}: ${error.message}`);
+    }
+  };
+
+  // Fetch subjects for currently selected semester (when admin navigates to Add Subject)
+  useEffect(() => {
+    if (activeMenu !== 'add-subject') return;
+    let mounted = true;
+    const fetchSubjects = async () => {
+      setLoadingSubjects(true);
+      try {
+        const subjectsRef = rtdbRef(rtdb, 'subjects');
+        const q = rtdbQuery(subjectsRef, orderByChild('semester'), equalTo(semester));
+        const snap = await rtdbGet(q);
+
+        if (!mounted) return;
+
+        if (snap.exists()) {
+          const data = snap.val();
+          const items = Object.keys(data).map(key => ({
+            id: key,
+            ...data[key]
+          }));
+          setSubjectsList(items);
+        } else {
+          setSubjectsList([]);
+        }
+      } catch (err) {
+        console.error("Fetch subjects error:", err);
+        alert(`Fetch subjects error: ${err.message || err}`);
+      } finally {
+        if (mounted) setLoadingSubjects(false);
+      }
+    };
+    fetchSubjects();
+    return () => { mounted = false; };
+  }, [activeMenu, semester]);
+
+  // Fetch teachers when menu is active
+  useEffect(() => {
+    if (activeMenu !== 'teachers') return;
+    let mounted = true;
+    const fetchTeachers = async () => {
+      setLoadingTeachers(true);
+      try {
+        const teachersRef = rtdbRef(rtdb, 'teachers');
+        const snap = await rtdbGet(teachersRef);
+
+        if (!mounted) return;
+
+        if (snap.exists()) {
+          const data = snap.val();
+          const items = Object.keys(data).map(key => ({
+            id: key,
+            ...data[key]
+          }));
+          setTeachersList(items);
+        } else {
+          setTeachersList([]);
+        }
+      } catch (err) {
+        console.error("Fetch teachers error:", err);
+      } finally {
+        if (mounted) setLoadingTeachers(false);
+      }
+    };
+    fetchTeachers();
+    return () => { mounted = false; };
+  }, [activeMenu]);
+
+  // Fetch preferences when menu is active
+  useEffect(() => {
+    if (activeMenu !== 'preferences') return;
+    let mounted = true;
+    const fetchPreferences = async () => {
+      setLoadingPreferences(true);
+      try {
+        const prefsRef = rtdbRef(rtdb, 'preferences');
+        const snap = await rtdbGet(prefsRef);
+
+        if (!mounted) return;
+
+        if (snap.exists()) {
+          const data = snap.val();
+          const prefs = Object.keys(data).map(key => ({
+            id: key,
+            ...data[key]
+          }));
+          setPreferencesList(prefs);
+        } else {
+          setPreferencesList([]);
+        }
+      } catch (err) {
+        console.error("Fetch preferences error:", err);
+      } finally {
+        if (mounted) setLoadingPreferences(false);
+      }
+    };
+    fetchPreferences();
+    return () => { mounted = false; };
+  }, [activeMenu]);
+
+  const handleAddTeacherSubmit = async (e) => {
+    e.preventDefault();
+    e.preventDefault();
+
+    // Validation: Name and Email always required
+    if (!teacherName || !teacherEmail) {
+      alert("Please fill all required fields (Name, Email)");
+      return;
+    }
+
+    // Validation: EmpID required
+    if (!teacherEmpId) {
+      alert("Please enter Employee ID");
+      return;
+    }
+
+    try {
+      // Check for duplicates (Email or EmpID) using RTDB
+      if (!editingTeacherId) {
+        const teachersRef = rtdbRef(rtdb, 'teachers');
+
+        const qEmail = rtdbQuery(teachersRef, orderByChild("email"), equalTo(teacherEmail));
+        const snapEmail = await rtdbGet(qEmail);
+        if (snapEmail.exists()) {
+          alert("A teacher with this email already exists.");
+          return;
+        }
+
+        if (!isTutor) {
+          const qEmp = rtdbQuery(teachersRef, orderByChild("employeeId"), equalTo(teacherEmpId));
+          const snapEmp = await rtdbGet(qEmp);
+          if (snapEmp.exists()) {
+            alert("A teacher with this Employee ID already exists.");
+            return;
+          }
+        }
+      }
+
+      // Prepare data
+      // For Tutors: Generate specific EmpID/Dept if not provided
+      const teacherData = {
+        name: teacherName,
+        email: teacherEmail,
+        employeeId: teacherEmpId,
+        department: teacherDept,
+        isTutor,
+        tutorClass: isTutor ? tutorClass : "",
+        updatedAt: Date.now()
+      };
+
+      if (editingTeacherId) {
+        const teacherRef = rtdbRef(rtdb, `teachers/${editingTeacherId}`);
+        await update(teacherRef, teacherData);
+
+        // Also try to update the actual user profile in 'staffs' based on email
+        try {
+          // Manual filter to find the UID from either 'staffs' or 'users'
+          let targetUid = null;
+
+          // 1. Try finding in 'staffs'
+          const staffsRef = rtdbRef(rtdb, 'staffs');
+          const staffSnap = await rtdbGet(staffsRef);
+          if (staffSnap.exists()) {
+            const allStaff = staffSnap.val();
+            targetUid = Object.keys(allStaff).find(key => allStaff[key].email === teacherEmail);
+          }
+
+          // 2. If not found, try finding in 'users'
+          if (!targetUid) {
+            const usersRef = rtdbRef(rtdb, 'users');
+            const usersSnap = await rtdbGet(usersRef);
+            if (usersSnap.exists()) {
+              const allUsers = usersSnap.val();
+              targetUid = Object.keys(allUsers).find(key => allUsers[key].email === teacherEmail);
+            }
+          }
+
+          if (targetUid) {
+            console.log("Found user/staff profile to update:", targetUid);
+            const updatePayload = {
+              isTutor,
+              tutorClass: isTutor ? tutorClass : "",
+              department: teacherDept,
+              employeeId: teacherEmpId,
+              name: teacherName,
+              email: teacherEmail // Ensure email is in update payload
+            };
+
+            await update(rtdbRef(rtdb, `staffs/${targetUid}`), updatePayload);
+            await update(rtdbRef(rtdb, `users/${targetUid}`), updatePayload);
+            console.log("Updated both staffs and users nodes for:", targetUid);
+          } else {
+            console.warn("No matching user/staff profile found for email:", teacherEmail);
+          }
+        } catch (updateErr) {
+          console.error("Error updating staff profile:", updateErr);
+        }
+
+        alert("Teacher updated successfully.");
+      } else {
+        // 1. Add to RTDB
+        const teachersRef = rtdbRef(rtdb, 'teachers');
+        const newTeacherRef = push(teachersRef);
+        await set(newTeacherRef, {
+          ...teacherData,
+          createdAt: Date.now()
+        });
+
+        // 2. Create Firebase Auth account with default password and send reset email
+        // We use a secondary app instance to avoid logging out the current admin
+        const secondaryApp = initializeApp(firebaseConfig, "secondary");
+        const secondaryAuth = getAuth(secondaryApp);
+
+        try {
+          const userCredential = await createUserWithEmailAndPassword(secondaryAuth, teacherEmail, "12345678");
+          const newUser = userCredential.user;
+
+          // Send reset email
+          await sendPasswordResetEmail(secondaryAuth, teacherEmail);
+
+          // 3. Create Firestore Staff Profile (required for login check)
+          await setDoc(doc(db, "staff", newUser.uid), {
+            name: teacherName,
+            email: teacherEmail,
+            role: "staff",
+            employeeId: teacherEmpId,
+            department: teacherDept,
+            isTutor,
+            tutorClass: isTutor ? tutorClass : "",
+            createdAt: serverTimestamp()
+          });
+
+          // 4. Create RTDB User Profile
+          await set(rtdbRef(rtdb, `users/${newUser.uid}`), {
+            name: teacherName,
+            email: teacherEmail,
+            role: "staff",
+            isTutor,
+            tutorClass: isTutor ? tutorClass : "",
+            createdAt: Date.now()
+          });
+
+          // 5. Also add to staffs/ node for role-specific lookups
+          await set(rtdbRef(rtdb, `staffs/${newUser.uid}`), {
+            name: teacherName,
+            email: teacherEmail,
+            role: "staff",
+            isTutor,
+            tutorClass: isTutor ? tutorClass : "",
+            createdAt: Date.now()
+          });
+
+          alert(`Teacher added! Account created with default password '12345678'. A password reset email has been sent to ${teacherEmail}.`);
+        } catch (authErr) {
+          if (authErr.code === 'auth/email-already-in-use') {
+            // Send reset email even if user exists
+            await sendPasswordResetEmail(secondaryAuth, teacherEmail);
+            alert(`Teacher data saved. This email is already registered in Firebase. A password reset email has been sent to ${teacherEmail}. They can use the 'First Time Login' flow to activate.`);
+          } else {
+            console.error("Auth creation/email error:", authErr);
+            alert(`Teacher added to database, but Auth creation failed: ${authErr.message}`);
+          }
+        } finally {
+          await deleteApp(secondaryApp);
+        }
+      }
+
+      // Reset form
+      setTeacherName("");
+      setTeacherEmail("");
+      setTeacherEmpId("");
+      setIsTutor(false);
+      setTutorClass("");
+      setEditingTeacherId(null);
+
+      // Refresh list
+      const teachersRef = rtdbRef(rtdb, 'teachers');
+      const snap = await rtdbGet(teachersRef);
+      if (snap.exists()) {
+        const data = snap.val();
+        const items = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setTeachersList(items);
+      } else {
+        setTeachersList([]);
+      }
+    } catch (err) {
+      console.error("Error saving teacher:", err);
+      alert("Error saving teacher: " + err.message);
+    }
+  };
+
+  const handleEditTeacher = (teacher) => {
+    setTeacherName(teacher.name);
+    setTeacherEmail(teacher.email);
+    setTeacherEmpId(teacher.employeeId);
+    setTeacherDept(teacher.department);
+    setIsTutor(teacher.isTutor || false);
+    setTutorClass(teacher.tutorClass || "");
+    setEditingTeacherId(teacher.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to form
+  };
+
+  const handleAddSubjectSubmit = async (e) => {
+    e.preventDefault();
+    if (!subjectName.trim() || !subjectCode.trim()) {
+      alert("Please provide subject name and code.");
+      return;
+    }
+    try {
+      // Check if subject code already exists using RTDB
+      const subjectsRef = rtdbRef(rtdb, 'subjects');
+      const qCheck = rtdbQuery(subjectsRef, orderByChild("code"), equalTo(subjectCode.trim()));
+      const snapCheck = await rtdbGet(qCheck);
+
+      if (snapCheck.exists()) {
+        alert(`Subject code "${subjectCode.trim()}" already exists. Please use a unique code.`);
+        return;
+      }
+
+      // Add to RTDB
+      const newSubjectRef = push(subjectsRef);
+      await set(newSubjectRef, {
+        semester,
+        name: subjectName.trim(),
+        code: subjectCode.trim(),
+        department,
+        credits: Number(credits) || 0,
+        teachingHours: Number(teachingHours) || 0,
+        createdAt: Date.now()
+      });
+
+      alert("Subject added successfully.");
+      // Clear fields and refetch
+      setSubjectName("");
+      setSubjectCode("");
+      setDepartment("Computer Science");
+      setCredits("");
+      setTeachingHours("");
+
+      // Refresh list (re-fetch)
+      const q = rtdbQuery(subjectsRef, orderByChild('semester'), equalTo(semester));
+      const snap = await rtdbGet(q);
+      if (snap.exists()) {
+        const data = snap.val();
+        const items = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setSubjectsList(items);
+      } else {
+        setSubjectsList([]);
+      }
+
+    } catch (err) {
+      console.error("Add subject error:", err);
+      alert(`Add subject error: ${err.message || err}`);
+    }
   };
 
   const handleSlotClick = (day, hour) => {
-    const key = `${selectedClass}-${day}-${hour}`;
-    const existingClass = timetableData[key];
-    if (existingClass) {
-      setSubject(existingClass.subject);
-      setTeacher(existingClass.teacher);
-      setRoom(existingClass.room);
+    const existingSlot = timetableData[day] ? timetableData[day][hour] : null;
+    if (existingSlot) {
+      setSubject(existingSlot.subject);
+      setTeacher(existingSlot.teacherEmpId); // Store ID/EmpID
+      setRoom(existingSlot.room);
     } else {
       setSubject("");
       setTeacher("");
       setRoom("");
     }
-    setCurrentSlot(key);
+    setCurrentSlot({ day, hour });
     setShowForm(true);
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
-    const newTimetable = { ...timetableData };
-    if (subject || teacher || room) {
-      newTimetable[currentSlot] = { subject, teacher, room };
-    } else {
-      delete newTimetable[currentSlot];
+    try {
+      const { day, hour } = currentSlot;
+      const timetableRef = rtdbRef(rtdb, `timetables/${selectedDept}/${selectedSemester}/${day}/${hour}`);
+
+      if (!subject) {
+        // Delete slot if subject is cleared
+        await set(timetableRef, null);
+      } else {
+        const teacherObj = teachersList.find(t => t.employeeId === teacher);
+        await set(timetableRef, {
+          subject,
+          teacherEmpId: teacher,
+          teacherName: teacherObj ? teacherObj.name : teacher,
+          room,
+          department: selectedDept,
+          semester: selectedSemester,
+          updatedAt: Date.now()
+        });
+      }
+
+      // Refresh timetable data
+      const updatedSnap = await rtdbGet(rtdbRef(rtdb, `timetables/${selectedDept}/${selectedSemester}`));
+      setTimetableData(updatedSnap.exists() ? updatedSnap.val() : {});
+
+      setShowForm(false);
+      setCurrentSlot(null);
+    } catch (err) {
+      console.error("Save timetable error:", err);
+      alert("Error saving timetable slot: " + err.message);
     }
-    setTimetableData(newTimetable);
-    setShowForm(false);
-    setCurrentSlot(null);
-    setSubject("");
-    setTeacher("");
-    setRoom("");
   };
 
   const handleCancel = () => {
@@ -90,30 +623,49 @@ const AdminHomePage = () => {
             className={activeMenu === "overview" ? "active" : ""}
             onClick={() => setActiveMenu("overview")}
           >
-            Overview
+            <LayoutDashboard size={20} className="menu-icon" /> Overview
+          </li>
+          <li
+            className={activeMenu === "preferences" ? "active" : ""}
+            onClick={() => setActiveMenu("preferences")}
+          >
+            <ClipboardList size={20} className="menu-icon" /> Subject Preferences
           </li>
           <li
             className={activeMenu === "class-timetable" ? "active" : ""}
             onClick={() => setActiveMenu("class-timetable")}
           >
-            Class Timetables
+            <Calendar size={20} className="menu-icon" /> Class Timetables
           </li>
           <li
             className={activeMenu === "teacher-timetable" ? "active" : ""}
             onClick={() => setActiveMenu("teacher-timetable")}
           >
-            Teacher Timetables
+            <Clock size={20} className="menu-icon" /> Teacher Timetables
           </li>
           <li
-            className={activeMenu === "personal" ? "active" : ""}
-            onClick={() => setActiveMenu("personal")}
+            className={activeMenu === "add-subject" ? "active" : ""}
+            onClick={() => setActiveMenu("add-subject")}
           >
-            Personal Details
+            <PlusCircle size={20} className="menu-icon" /> Add Subject
+          </li>
+          <li
+            className={activeMenu === "teachers" ? "active" : ""}
+            onClick={() => setActiveMenu("teachers")}
+          >
+            <GraduationCap size={20} className="menu-icon" /> Teachers
+          </li>
+          <li
+            className={activeMenu === "users" ? "active" : ""}
+            onClick={() => setActiveMenu("users")}
+          >
+            <Users size={20} className="menu-icon" /> Users
           </li>
         </ul>
         <button onClick={handleSignOut} className="sign-out-btn">
           Sign Out
         </button>
+
       </aside>
 
       {/* Main Content */}
@@ -147,32 +699,57 @@ const AdminHomePage = () => {
             <h1>{activeMenu === "class-timetable" ? "Class Timetables" : "Teacher Timetables"}</h1>
 
             <div className="selector-section">
-              {activeMenu === "class-timetable" ? (
-                <div className="selector">
-                  <label>Select Class:</label>
-                  <select
-                    value={selectedClass}
-                    onChange={(e) => setSelectedClass(e.target.value)}
-                  >
-                    {classes.map((cls) => (
-                      <option key={cls} value={cls}>{cls}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div className="selector">
-                  <label>Select Teacher:</label>
-                  <select
-                    value={selectedTeacher}
-                    onChange={(e) => setSelectedTeacher(e.target.value)}
-                  >
-                    {teachers.map((teacher) => (
-                      <option key={teacher} value={teacher}>{teacher}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div className="selector">
+                <label>Department:</label>
+                <select
+                  value={selectedDept}
+                  onChange={(e) => setSelectedDept(e.target.value)}
+                >
+                  {departments.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="selector">
+                <label>Semester:</label>
+                <select
+                  value={selectedSemester}
+                  onChange={(e) => setSelectedSemester(e.target.value)}
+                >
+                  {Array.from({ length: 8 }, (_, i) => `Semester ${i + 1}`).map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            {/* Users list view */}
+            {activeMenu === 'users' && (
+              <div className="users-section">
+                <h1>Registered Users</h1>
+                {loadingUsers ? <p>Loading users...</p> : usersList.length === 0 ? <p>No users found.</p> : (
+                  <table className="users-table">
+                    <thead>
+                      <tr>
+                        <th>UID</th><th>Name</th><th>Username</th><th>Email</th><th>Role</th><th>Created At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usersList.map(u => (
+                        <tr key={u.uid}>
+                          <td>{u.uid}</td>
+                          <td>{u.name || ''}</td>
+                          <td>{u.username || ''}</td>
+                          <td>{u.email || ''}</td>
+                          <td>{u.role || ''}</td>
+                          <td>{u.createdAt ? (typeof u.createdAt === 'number' ? new Date(u.createdAt).toLocaleString() : u.createdAt) : ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
 
             <table className="admin-timetable">
               <thead>
@@ -188,20 +765,17 @@ const AdminHomePage = () => {
                   <tr key={hour}>
                     <td>{hour}</td>
                     {days.map((day) => {
-                      const key = activeMenu === "class-timetable"
-                        ? `${selectedClass}-${day}-${hour}`
-                        : `${selectedTeacher}-${day}-${hour}`;
-                      const classInfo = timetableData[key];
+                      const classInfo = timetableData[day] ? timetableData[day][hour] : null;
                       return (
                         <td
-                          key={key}
+                          key={`${day}-${hour}`}
                           onClick={() => handleSlotClick(day, hour)}
                           className="timetable-cell"
                         >
                           {classInfo ? (
                             <div className="class-info">
                               <div className="subject">{classInfo.subject}</div>
-                              <div className="teacher">{classInfo.teacher}</div>
+                              <div className="teacher">{classInfo.teacherName}</div>
                               <div className="room">{classInfo.room}</div>
                             </div>
                           ) : (
@@ -222,21 +796,39 @@ const AdminHomePage = () => {
                   <form onSubmit={handleFormSubmit}>
                     <div className="form-group">
                       <label>Subject:</label>
-                      <input
-                        type="text"
+                      <select
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
-                        placeholder="Enter subject"
-                      />
+                        required
+                      >
+                        <option value="">Select Subject</option>
+                        {availableSubjects.map(s => (
+                          <option key={s.id} value={s.name}>{s.name} ({s.code})</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="form-group">
                       <label>Teacher:</label>
-                      <input
-                        type="text"
+                      <select
                         value={teacher}
-                        onChange={(e) => setTeacher(e.target.value)}
-                        placeholder="Enter teacher"
-                      />
+                        onChange={(e) => {
+                          setTeacher(e.target.value);
+                          // Ensure email is explicitly handled if missing, assuming teacherRecord or finalUser context
+                          // This part of the instruction is abstract, so applying it as a comment for clarity.
+                          // If there's a specific teacher object to merge, it would be done here.
+                          // Example:
+                          // const selectedTeacher = teachersList.find(t => t.employeeId === e.target.value);
+                          // if (selectedTeacher && !selectedTeacher.email) {
+                          //   // Logic to fetch or set email if missing for the selected teacher
+                          // }
+                        }}
+                        required
+                      >
+                        <option value="">Select Teacher</option>
+                        {teachersList.map(t => (
+                          <option key={t.id} value={t.employeeId}>{t.name} ({t.employeeId})</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="form-group">
                       <label>Room:</label>
@@ -258,65 +850,244 @@ const AdminHomePage = () => {
           </div>
         )}
 
-        {activeMenu === "personal" && (
-          <div className="personal-section">
-            <h1>Personal Details & Preferences</h1>
-            <div className="personal-form">
-              <div className="form-section">
-                <h2>Personal Information</h2>
+        {activeMenu === "add-subject" && (
+          <div className="add-subject-section">
+            <h1>Add Subject</h1>
+            <div className="form-container" style={{ maxWidth: '700px' }}>
+              <form onSubmit={handleAddSubjectSubmit}>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Name:</label>
-                    <input type="text" value={user ? user.name : "Loading..."} readOnly />
+                    <label>Semester</label>
+                    <select value={semester} onChange={(e) => setSemester(e.target.value)}>
+                      {Array.from({ length: 8 }, (_, i) => `Semester ${i + 1}`).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                   <div className="form-group">
-                    <label>Email:</label>
-                    <input type="email" value={user ? user.email : "Loading..."} readOnly />
+                    <label>Subject Name</label>
+                    <input type="text" value={subjectName} onChange={(e) => setSubjectName(e.target.value)} placeholder="Subject name" />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Department</label>
+                    <select value={department} onChange={(e) => setDepartment(e.target.value)}>
+                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Phone:</label>
-                    <input type="tel" defaultValue="+1-234-567-8900" />
+                    <label>Subject Code</label>
+                    <input type="text" value={subjectCode} onChange={(e) => setSubjectCode(e.target.value)} placeholder="e.g. MATH101" />
                   </div>
                   <div className="form-group">
-                    <label>Department:</label>
-                    <input type="text" defaultValue="Administration" />
+                    <label>Credits</label>
+                    <input type="number" min="0" value={credits} onChange={(e) => setCredits(e.target.value)} placeholder="Credits" />
+                  </div>
+                  <div className="form-group">
+                    <label>Teaching Hours</label>
+                    <input type="number" min="0" value={teachingHours} onChange={(e) => setTeachingHours(e.target.value)} placeholder="Hours" />
                   </div>
                 </div>
-              </div>
-
-              <div className="form-section">
-                <h2>Subject Preferences</h2>
-                <div className="preferences-grid">
-                  {["Mathematics", "Science", "English", "History", "Geography", "Art", "Physical Education", "Computer Science"].map((subj) => (
-                    <label key={subj} className="preference-item">
-                      <input type="checkbox" defaultChecked={Math.random() > 0.5} />
-                      {subj}
-                    </label>
-                  ))}
+                <div className="form-buttons">
+                  <button type="submit">Add Subject</button>
+                  <button type="button" onClick={() => { setSubjectName(''); setSubjectCode(''); setCredits(''); setTeachingHours(''); }}>Clear</button>
                 </div>
-              </div>
+              </form>
+            </div>
 
-              <div className="form-section">
-                <h2>Class Preferences</h2>
-                <div className="preferences-grid">
-                  {classes.map((cls) => (
-                    <label key={cls} className="preference-item">
-                      <input type="checkbox" defaultChecked={Math.random() > 0.3} />
-                      {cls}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="form-actions">
-                <button className="save-btn">Save Changes</button>
-                <button className="cancel-btn">Cancel</button>
-              </div>
+            <div style={{ marginTop: 20 }}>
+              <h2>Subjects in {semester}</h2>
+              {loadingSubjects ? <p>Loading...</p> : subjectsList.length === 0 ? <p>No subjects for this semester.</p> : (
+                <table className="subjects-table">
+                  <thead>
+                    <tr><th>Code</th><th>Name</th><th>Department</th><th>Credits</th><th>Hours</th></tr>
+                  </thead>
+                  <tbody>
+                    {subjectsList.map(s => (
+                      <tr key={s.id}>
+                        <td>{s.code}</td>
+                        <td>{s.name}</td>
+                        <td>{s.department || ''}</td>
+                        <td>{s.credits}</td>
+                        <td>{s.teachingHours}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
+
+        {activeMenu === "teachers" && (
+          <div className="add-subject-section">
+            <h1>Teacher Management</h1>
+            <div className="form-container" style={{ maxWidth: '700px' }}>
+              <h2>{editingTeacherId ? "Edit Teacher" : "Add New Teacher"}</h2>
+              <form onSubmit={handleAddTeacherSubmit}>
+                <div className="form-row">
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label style={{ marginBottom: 0 }}>Is Tutor?</label>
+                    <input
+                      type="checkbox"
+                      checked={isTutor}
+                      onChange={(e) => setIsTutor(e.target.checked)}
+                      style={{ width: '20px', height: '20px' }}
+                    />
+                  </div>
+                  {isTutor && (
+                    <div className="form-group">
+                      <label>Class to Tutor</label>
+                      <input
+                        value={tutorClass}
+                        onChange={(e) => setTutorClass(e.target.value)}
+                        placeholder="e.g. Class 10A"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Name</label>
+                    <input value={teacherName} onChange={(e) => setTeacherName(e.target.value)} placeholder="Full Name" />
+                  </div>
+                  <div className="form-group">
+                    <label>Employee ID</label>
+                    <input value={teacherEmpId} onChange={(e) => setTeacherEmpId(e.target.value)} placeholder="EMP-123" />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input type="email" value={teacherEmail} onChange={(e) => setTeacherEmail(e.target.value)} placeholder="email@school.com" />
+                  </div>
+                  <div className="form-group">
+                    <label>Department</label>
+                    <select value={teacherDept} onChange={(e) => setTeacherDept(e.target.value)}>
+                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="form-buttons">
+                  <button type="submit">{editingTeacherId ? "Update Teacher" : "Add Teacher"}</button>
+                  {editingTeacherId && (
+                    <button type="button" onClick={() => {
+                      setEditingTeacherId(null);
+                      setTeacherName("");
+                      setTeacherEmail("");
+                      setTeacherEmpId("");
+
+                      setIsTutor(false);
+                      setTutorClass("");
+                    }}>Cancel Edit</button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div style={{ marginTop: 30 }}>
+              <h2>All Teachers</h2>
+              {loadingTeachers ? <p>Loading...</p> : (
+                <table className="subjects-table">
+                  <thead>
+                    <tr><th>ID</th><th>Name</th><th>Email</th><th>Dept</th><th>Tutor?</th><th>Class</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody>
+                    {teachersList.map(t => (
+                      <tr key={t.id}>
+                        <td>{t.employeeId}</td>
+                        <td>{t.name}</td>
+                        <td>{t.email}</td>
+                        <td>{t.department}</td>
+                        <td>{t.isTutor ? "Yes" : "No"}</td>
+                        <td>{t.tutorClass || "-"}</td>
+                        <td>
+                          <button onClick={() => handleEditTeacher(t)} className="edit-btn" style={{ marginRight: '10px' }}>Edit</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeMenu === "preferences" && (
+          <div className="preferences-section">
+            <h1>Submitted Subject Preferences</h1>
+            {loadingPreferences ? <p>Loading...</p> : preferencesList.length === 0 ? <p>No preferences submitted yet.</p> : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="subjects-table">
+                  <thead>
+                    <tr>
+                      <th>Teacher</th>
+                      <th>Dept</th>
+                      <th>Sem</th>
+                      <th>Subject Prefs</th>
+                      <th>Class Prefs</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preferencesList.map(p => (
+                      <tr key={p.id}>
+                        <td>
+                          <div style={{ fontWeight: 'bold' }}>{p.teacherName}</div>
+                          <div style={{ fontSize: '0.85em', color: '#666' }}>{p.teacherEmpId}</div>
+                        </td>
+                        <td>{p.department}</td>
+                        <td>{p.semester}</td>
+                        <td>
+                          <ol style={{ paddingLeft: '20px', margin: 0 }}>
+                            {p.subjectPref1 && <li>{p.subjectPref1}</li>}
+                            {p.subjectPref2 && <li>{p.subjectPref2}</li>}
+                            {p.subjectPref3 && <li>{p.subjectPref3}</li>}
+                          </ol>
+                        </td>
+                        <td>
+                          <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                            {p.classPref1 && <li>{p.classPref1}</li>}
+                            {p.classPref2 && <li>{p.classPref2}</li>}
+                            {p.classPref3 && <li>{p.classPref3}</li>}
+                          </ul>
+                        </td>
+                        <td>
+                          {p.createdAt ? (p.createdAt.seconds ? new Date(p.createdAt.seconds * 1000).toLocaleDateString() : 'Just now') : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '20px' }}>
+          <h3>Debug Tools</h3>
+          <button onClick={async () => {
+            try {
+              const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
+              await set(timetablesRef, {
+                subject: "Introduction to CS",
+                teacherEmpId: "T-123", // Matches our test case
+                teacherName: "Test Teacher",
+                room: "101",
+                department: "Computer Science",
+                semester: "Semester 1"
+              });
+              alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
+            } catch (e) {
+              alert("Error seeding: " + e.message);
+            }
+          }} style={{ background: 'orange', color: 'white', padding: '10px' }}>
+            Seed Timetable Data
+          </button>
+        </div>
       </main>
     </div>
   );

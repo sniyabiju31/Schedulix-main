@@ -1,0 +1,50 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['email','name','role','createdAt']) && newData.child('email').isString() && newData.child('name').isString() && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'staff')"
+      }
+    },
+    "admins": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+    "staffs": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "email"
+      ]
+    },
+    "test_connection": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "subjects": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "semester",
+        "code"
+      ]
+    },
+    "teachers": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "email",
+        "employeeId"
+      ]
+    },
+    "preferences": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
