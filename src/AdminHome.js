@@ -67,6 +67,7 @@ const AdminHomePage = () => {
   // Settings State
   const [windowStart, setWindowStart] = useState("");
   const [windowEnd, setWindowEnd] = useState("");
+  const [isUnlocked, setIsUnlocked] = useState(false);
 
   // Preferences management
   const [preferencesList, setPreferencesList] = useState([]);
@@ -95,8 +96,14 @@ const AdminHomePage = () => {
                 const data = snap.val();
                 setSettings(data);
                 if (data.student_update_window) {
-                  setWindowStart(new Date(data.student_update_window.start).toISOString().slice(0, 16));
-                  setWindowEnd(new Date(data.student_update_window.end).toISOString().slice(0, 16));
+                  const { start, end, isUnlocked } = data.student_update_window;
+                  if (start && !isNaN(new Date(start).getTime())) {
+                    setWindowStart(new Date(start).toISOString().slice(0, 16));
+                  }
+                  if (end && !isNaN(new Date(end).getTime())) {
+                    setWindowEnd(new Date(end).toISOString().slice(0, 16));
+                  }
+                  setIsUnlocked(isUnlocked || false);
                 }
               }
             });
@@ -439,14 +446,40 @@ const AdminHomePage = () => {
     try {
       const startTs = new Date(windowStart).getTime();
       const endTs = new Date(windowEnd).getTime();
-      await set(rtdbRef(rtdb, 'settings/student_update_window'), {
+      await update(rtdbRef(rtdb, 'settings/student_update_window'), {
         start: startTs,
         end: endTs
       });
       alert("Access window updated!");
-      setSettings(prev => ({ ...prev, student_update_window: { start: startTs, end: endTs } }));
+      setSettings(prev => ({
+        ...prev,
+        student_update_window: {
+          ...prev.student_update_window,
+          start: startTs,
+          end: endTs
+        }
+      }));
     } catch (err) {
       alert("Error: " + err.message);
+    }
+  };
+
+  const handleToggleUnlock = async () => {
+    const nextState = !isUnlocked;
+    try {
+      await update(rtdbRef(rtdb, 'settings/student_update_window'), {
+        isUnlocked: nextState
+      });
+      setIsUnlocked(nextState);
+      setSettings(prev => ({
+        ...prev,
+        student_update_window: {
+          ...prev.student_update_window,
+          isUnlocked: nextState
+        }
+      }));
+    } catch (err) {
+      alert("Error toggling unlock: " + err.message);
     }
   };
 
@@ -1371,23 +1404,45 @@ const AdminHomePage = () => {
           <div className="add-subject-section">
             <h1>Administrative Settings</h1>
             <div className="form-container" style={{ maxWidth: '600px' }}>
-              <h2>Student Detail Update Window</h2>
-              <p className="description">Set the time period during which students can update their personal details. Outside this window, their profile will be view-only.</p>
-              <form onSubmit={handleUpdateWindowSubmit}>
-                <div className="form-group">
-                  <label>Window Start Date & Time</label>
-                  <input type="datetime-local" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} required />
+              <h2>Student Detail Update Control</h2>
+
+              <div className="control-card" style={{ marginBottom: '30px', padding: '20px', background: 'rgba(188, 19, 254, 0.05)', border: '1px solid var(--accent-violet)', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: 'var(--accent-cyan)' }}>Manual Unlock</h3>
+                    <p className="description" style={{ margin: '5px 0 0 0', fontSize: '0.8rem' }}>Override the time window and allow students to edit their profiles immediately.</p>
+                  </div>
+                  <label className="switch">
+                    <input type="checkbox" checked={isUnlocked} onChange={handleToggleUnlock} />
+                    <span className="slider round"></span>
+                  </label>
                 </div>
-                <div className="form-group">
-                  <label>Window End Date & Time</label>
-                  <input type="datetime-local" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} required />
-                </div>
-                <div className="form-buttons">
-                  <button type="submit">Update Window</button>
-                </div>
-              </form>
-              <div className="current-status" style={{ marginTop: '20px', padding: '15px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-                <strong>Current Status:</strong> {Date.now() >= settings.student_update_window?.start && Date.now() <= settings.student_update_window?.end ? <span style={{ color: 'green' }}>Open</span> : <span style={{ color: 'red' }}>Closed</span>}
+              </div>
+
+              <div style={{ opacity: isUnlocked ? 0.5 : 1, pointerEvents: isUnlocked ? 'none' : 'auto' }}>
+                <h2>Scheduled Access Window</h2>
+                <p className="description">Set the time period during which students can update their personal details. (Disabled if Manual Unlock is ON)</p>
+                <form onSubmit={handleUpdateWindowSubmit}>
+                  <div className="form-group">
+                    <label>Window Start Date & Time</label>
+                    <input type="datetime-local" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Window End Date & Time</label>
+                    <input type="datetime-local" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} required />
+                  </div>
+                  <div className="form-buttons">
+                    <button type="submit">Update Window</button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="current-status" style={{ marginTop: '30px', padding: '15px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                <strong>Current Status:</strong> {isUnlocked || (Date.now() >= settings.student_update_window?.start && Date.now() <= settings.student_update_window?.end) ?
+                  <span style={{ color: '#22c55e', textShadow: '0 0 10px rgba(34, 197, 94, 0.4)' }}>🔓 OPEN (Full Access)</span> :
+                  <span style={{ color: '#ef4444', textShadow: '0 0 10px rgba(239, 68, 68, 0.4)' }}>🔒 CLOSED (View Only)</span>
+                }
+                {isUnlocked && <div style={{ fontSize: '0.75rem', marginTop: '5px', color: 'var(--accent-violet)' }}>* Manually unlocked by administrator</div>}
               </div>
             </div>
           </div>
