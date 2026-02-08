@@ -28,6 +28,11 @@ const AdminHomePage = () => {
   const [user, setUser] = useState(null);
   const [usersList, setUsersList] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [users, setUsers] = useState({});
+  const [teachersObj, setTeachersObj] = useState({}); // Renamed to avoid conflict with teachersList
+  const [students, setStudents] = useState({});
+  const [settings, setSettings] = useState({ student_update_window: { start: 0, end: 0 } });
+
 
   // Subjects management
   const [semester, setSemester] = useState("Semester 1");
@@ -47,6 +52,20 @@ const AdminHomePage = () => {
   const [teachersList, setTeachersList] = useState([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [editingTeacherId, setEditingTeacherId] = useState(null);
+  // Student Form State
+  const [studentName, setStudentName] = useState("");
+  const [studentEmail, setStudentEmail] = useState("");
+  const [studentRollNo, setStudentRollNo] = useState("");
+  const [studentDept, setStudentDept] = useState("CSE");
+  const [studentSemester, setStudentSemester] = useState("1");
+  const [studentTotalFees, setStudentTotalFees] = useState(0);
+  const [editingStudentId, setEditingStudentId] = useState(null);
+  const [studentsList, setStudentsList] = useState([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+
+  // Settings State
+  const [windowStart, setWindowStart] = useState("");
+  const [windowEnd, setWindowEnd] = useState("");
 
   // Preferences management
   const [preferencesList, setPreferencesList] = useState([]);
@@ -60,6 +79,26 @@ const AdminHomePage = () => {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             setUser(docSnap.data());
+            const studentsRef = rtdbRef(rtdb, 'students');
+            rtdbGet(studentsRef).then((snap) => {
+              if (snap.exists()) {
+                const data = snap.val();
+                setStudents(data);
+                setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })));
+              }
+            });
+
+            const settingsRef = rtdbRef(rtdb, 'settings');
+            rtdbGet(settingsRef).then((snap) => {
+              if (snap.exists()) {
+                const data = snap.val();
+                setSettings(data);
+                if (data.student_update_window) {
+                  setWindowStart(new Date(data.student_update_window.start).toISOString().slice(0, 16));
+                  setWindowEnd(new Date(data.student_update_window.end).toISOString().slice(0, 16));
+                }
+              }
+            });
           } else {
             console.warn("Admin document not found for user:", user.uid);
             alert("Warning: Your account is logged in but does not have an 'Admin' profile in the database. You will not be able to add teachers. Please Sign Out and Sign Up again as an Admin.");
@@ -292,6 +331,123 @@ const AdminHomePage = () => {
     return () => { mounted = false; };
   }, [activeMenu]);
 
+  const handleEditTeacher = (teacher) => {
+    setTeacherName(teacher.name);
+    setTeacherEmail(teacher.email);
+    setTeacherEmpId(teacher.employeeId);
+    setTeacherDept(teacher.department);
+    setEditingTeacherId(teacher.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to form
+  };
+
+  const handleEditStudent = (student) => {
+    setEditingStudentId(student.id);
+    setStudentName(student.name);
+    setStudentEmail(student.email);
+    setStudentRollNo(student.rollNo || '');
+    setStudentDept(student.department);
+    setStudentSemester(student.semester);
+    setStudentTotalFees(student.totalFees || 0);
+    setActiveMenu("students");
+  };
+
+  const handleAddStudentSubmit = async (e) => {
+    e.preventDefault();
+    if (!studentName || !studentEmail || !studentRollNo) {
+      alert("Please fill in name, email and roll number.");
+      return;
+    }
+    try {
+      const studentData = {
+        name: studentName,
+        email: studentEmail,
+        rollNo: studentRollNo,
+        department: studentDept,
+        semester: studentSemester,
+        totalFees: Number(studentTotalFees),
+        updatedAt: Date.now()
+      };
+
+      if (editingStudentId) {
+        const studentRef = rtdbRef(rtdb, `students/${editingStudentId}`);
+        await update(studentRef, studentData);
+        alert("Student updated successfully.");
+      } else {
+        const studentsRef = rtdbRef(rtdb, 'students');
+        const newStudentRef = push(studentsRef);
+        await set(newStudentRef, { ...studentData, createdAt: Date.now() });
+
+        const secondaryApp = initializeApp(firebaseConfig, "secondaryStudent");
+        const secondaryAuth = getAuth(secondaryApp);
+        try {
+          const userCredential = await createUserWithEmailAndPassword(secondaryAuth, studentEmail, "12345678");
+          const newUser = userCredential.user;
+          await sendPasswordResetEmail(secondaryAuth, studentEmail);
+
+          await setDoc(doc(db, "student", newUser.uid), {
+            ...studentData,
+            username: studentRollNo,
+            role: "student",
+            createdAt: serverTimestamp()
+          });
+
+          await set(rtdbRef(rtdb, `users/${newUser.uid}`), {
+            name: studentName,
+            username: studentRollNo,
+            email: studentEmail,
+            role: "student",
+            department: studentDept,
+            semester: studentSemester,
+            createdAt: Date.now()
+          });
+
+          await set(rtdbRef(rtdb, `fees/${newUser.uid}`), {
+            total: Number(studentTotalFees),
+            paid: 0,
+            pending: Number(studentTotalFees)
+          });
+
+          alert(`Student added successfully!\nDefault Username: ${studentRollNo}\nDefault Password: 12345678\n\nA password reset email has been sent to ${studentEmail}.`);
+        } catch (authErr) {
+          if (authErr.code === 'auth/email-already-in-use') {
+            await sendPasswordResetEmail(secondaryAuth, studentEmail);
+            alert("Student data saved. User already exists, reset email sent.");
+          } else {
+            alert("Auth error: " + authErr.message);
+          }
+        } finally {
+          await deleteApp(secondaryApp);
+        }
+      }
+
+      const snap = await rtdbGet(rtdbRef(rtdb, 'students'));
+      if (snap.exists()) {
+        const data = snap.val();
+        setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })));
+      }
+
+      setStudentName(""); setStudentEmail(""); setStudentRollNo(""); setEditingStudentId(null);
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleUpdateWindowSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const startTs = new Date(windowStart).getTime();
+      const endTs = new Date(windowEnd).getTime();
+      await set(rtdbRef(rtdb, 'settings/student_update_window'), {
+        start: startTs,
+        end: endTs
+      });
+      alert("Access window updated!");
+      setSettings(prev => ({ ...prev, student_update_window: { start: startTs, end: endTs } }));
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
+
   const handleAddTeacherSubmit = async (e) => {
     e.preventDefault();
     if (!teacherName || !teacherEmail || !teacherEmpId) {
@@ -415,15 +571,6 @@ const AdminHomePage = () => {
       console.error("Error saving teacher:", err);
       alert("Error saving teacher: " + err.message);
     }
-  };
-
-  const handleEditTeacher = (teacher) => {
-    setTeacherName(teacher.name);
-    setTeacherEmail(teacher.email);
-    setTeacherEmpId(teacher.employeeId);
-    setTeacherDept(teacher.department);
-    setEditingTeacherId(teacher.id);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to form
   };
 
   const handleAddSubjectSubmit = async (e) => {
@@ -584,10 +731,22 @@ const AdminHomePage = () => {
             <GraduationCap size={20} className="menu-icon" /> Teachers
           </li>
           <li
+            className={activeMenu === "students" ? "active" : ""}
+            onClick={() => setActiveMenu("students")}
+          >
+            <Users size={20} className="menu-icon" /> Students
+          </li>
+          <li
+            className={activeMenu === "settings" ? "active" : ""}
+            onClick={() => setActiveMenu("settings")}
+          >
+            <Clock size={20} className="menu-icon" /> Access Window
+          </li>
+          <li
             className={activeMenu === "users" ? "active" : ""}
             onClick={() => setActiveMenu("users")}
           >
-            <Users size={20} className="menu-icon" /> Users
+            <Users size={20} className="menu-icon" /> All Users
           </li>
         </ul>
         <button onClick={handleSignOut} className="sign-out-btn">
@@ -975,10 +1134,145 @@ const AdminHomePage = () => {
             } catch (e) {
               alert("Error seeding: " + e.message);
             }
-          }} style={{ background: 'orange', color: 'white', padding: '10px' }}>
+          }} style={{ background: 'orange', color: 'white', padding: '10px', marginRight: '10px' }}>
             Seed Timetable Data
           </button>
+
+          <button onClick={async () => {
+            try {
+              const studentData = {
+                name: "Test Student",
+                email: "student@test.com",
+                rollNo: "S-101",
+                department: "Computer Science",
+                semester: "1",
+                totalFees: 50000,
+                createdAt: Date.now()
+              };
+
+              // 1. Add to RTDB 'students' master list
+              const snapshot = await rtdbGet(rtdbRef(rtdb, 'students'));
+              const students = snapshot.val() || {};
+              const exists = Object.values(students).some(s => s.rollNo === "S-101");
+              if (exists) {
+                alert("Test Student S-101 already exists in master list.");
+              } else {
+                await set(push(rtdbRef(rtdb, 'students')), studentData);
+              }
+
+              // 2. Note: For full login, the student must still go through "First Time Login" 
+              // or Admin must create the Firebase Auth account.
+              // To make it instant, we can try to create the Auth account if you are logged in as admin.
+              alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Roll Number: S-101\n6. Set your own password!");
+
+            } catch (e) {
+              alert("Error seeding student: " + e.message);
+            }
+          }} style={{ background: '#28a745', color: 'white', padding: '10px' }}>
+            Seed Test Student (S-101)
+          </button>
         </div>
+        {activeMenu === "students" && (
+          <div className="add-subject-section">
+            <h1>Student Management</h1>
+            <div className="form-container" style={{ maxWidth: '700px' }}>
+              <h2>{editingStudentId ? "Edit Student" : "Add New Student"}</h2>
+              <form onSubmit={handleAddStudentSubmit}>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Name</label>
+                    <input value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="Full Name" />
+                  </div>
+                  <div className="form-group">
+                    <label>Roll Number / ID</label>
+                    <input value={studentRollNo} onChange={(e) => setStudentRollNo(e.target.value)} placeholder="ROLL-123" />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} placeholder="student@school.com" />
+                  </div>
+                  <div className="form-group">
+                    <label>Department</label>
+                    <select value={studentDept} onChange={(e) => setStudentDept(e.target.value)}>
+                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Semester</label>
+                    <select value={studentSemester} onChange={(e) => setStudentSemester(e.target.value)}>
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s.toString()}>Semester {s}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Total Fees (Annual)</label>
+                    <input type="number" value={studentTotalFees} onChange={(e) => setStudentTotalFees(e.target.value)} />
+                  </div>
+                </div>
+                <div className="form-buttons">
+                  <button type="submit">{editingStudentId ? "Update Student" : "Add Student"}</button>
+                  {editingStudentId && (
+                    <button type="button" onClick={() => {
+                      setEditingStudentId(null); setStudentName(""); setStudentEmail(""); setStudentRollNo("");
+                    }}>Cancel Edit</button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div style={{ marginTop: 30 }}>
+              <h2>All Students</h2>
+              <table className="subjects-table">
+                <thead>
+                  <tr><th>Roll No</th><th>Name</th><th>Email</th><th>Dept</th><th>Sem</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {studentsList.map(s => (
+                    <tr key={s.id}>
+                      <td>{s.rollNo}</td>
+                      <td>{s.name}</td>
+                      <td>{s.email}</td>
+                      <td>{s.department}</td>
+                      <td>{s.semester}</td>
+                      <td>
+                        <button onClick={() => handleEditStudent(s)} className="edit-btn">Edit</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeMenu === "settings" && (
+          <div className="add-subject-section">
+            <h1>Administrative Settings</h1>
+            <div className="form-container" style={{ maxWidth: '600px' }}>
+              <h2>Student Detail Update Window</h2>
+              <p className="description">Set the time period during which students can update their personal details. Outside this window, their profile will be view-only.</p>
+              <form onSubmit={handleUpdateWindowSubmit}>
+                <div className="form-group">
+                  <label>Window Start Date & Time</label>
+                  <input type="datetime-local" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} required />
+                </div>
+                <div className="form-group">
+                  <label>Window End Date & Time</label>
+                  <input type="datetime-local" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} required />
+                </div>
+                <div className="form-buttons">
+                  <button type="submit">Update Window</button>
+                </div>
+              </form>
+              <div className="current-status" style={{ marginTop: '20px', padding: '15px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                <strong>Current Status:</strong> {Date.now() >= settings.student_update_window?.start && Date.now() <= settings.student_update_window?.end ? <span style={{ color: 'green' }}>Open</span> : <span style={{ color: 'red' }}>Closed</span>}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
