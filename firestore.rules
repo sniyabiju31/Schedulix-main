@@ -1,41 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Check if the user is an admin
-    function isAdmin() {
-      return request.auth != null && exists(/databases/$(database)/documents/admin/$(request.auth.uid));
-    }
-
-    // Rules for Subjects collection
-    match /subjects/{subjectId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin();
-    }
-
-    // FIXED: Allow users to read AND WRITE their own admin profile (needed for signup)
-    match /admin/{userId} {
-      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
-    }
-
-    // NEW: Allow users to read AND WRITE their own staff profile (needed for signup/login as staff)
-    match /staff/{userId} {
-      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
-    }
-
-    // Rules for Teachers collection (Managed by Admin)
-    // Rules for Teachers collection (Managed by Admin)
-    match /teachers/{teacherId} {
-      // Allow PUBLIC read so Auth.js can verify EmpID/Email before login
-      allow read: if true; 
-      // Only admins can add/edit teachers
-      allow write: if isAdmin();
-    }
-
-    // Rules for Subject Preferences (Submitted by Staff)
-    match /preferences/{prefId} {
-      allow create, write: if request.auth != null && request.resource.data.teacherUid == request.auth.uid;
-      allow read: if request.auth != null && (resource.data.teacherUid == request.auth.uid || isAdmin());
+    match /{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
   }
 }

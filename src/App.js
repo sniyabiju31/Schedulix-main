@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Auth from "./Auth";
 import AdminHomePage from "./AdminHome";
 import StaffHomePage from "./home";
+import StudentHomePage from "./StudentHome";
 import "./App.css";
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
           <Route path="/" element={<Auth />} />
           <Route path="/admin-home" element={<AdminHomePage />} />
           <Route path="/staff-home" element={<StaffHomePage />} />
+          <Route path="/student-home" element={<StudentHomePage />} />
         </Routes>
       </div>
     </Router>
