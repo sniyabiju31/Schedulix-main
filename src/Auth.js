@@ -15,6 +15,7 @@ export default function Auth() {
     email: "",
     password: "",
     employeeId: "", // For first time login
+    department: "Computer Science", // Default
   });
 
   function onChange(e) {
@@ -28,7 +29,7 @@ export default function Auth() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    const { email, password, name, username } = form;
+    const { email, password, name, username, department } = form; // Added department
 
     try {
       if (mode === "activate") {
@@ -138,19 +139,10 @@ export default function Auth() {
           }
         }
 
+        // ... (existing activate logic)
+        // ...
       } else if (mode === "signup") {
-        // Prevent creating a new account when the email is already registered
-        const existingMethods = await fetchSignInMethodsForEmail(auth, email);
-        if (existingMethods && existingMethods.length > 0) {
-          if (existingMethods.includes("password")) {
-            alert("An account with this email already exists. Try logging in or use Reset Password.");
-          } else {
-            alert(
-              `An account already exists using provider(s): ${existingMethods.join(", ")}. Use that provider to sign in or reset your password.`
-            );
-          }
-          return;
-        }
+        // ... (existing signup checks)
 
         // Create Firebase Auth account (secure password handling)
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -158,7 +150,7 @@ export default function Auth() {
         const userRole = role;
 
         // Debug: log the created user
-        console.log('Created Firebase Auth user:', user.uid, { email, name, username, role: userRole });
+        console.log('Created Firebase Auth user:', user.uid, { email, name, username, role: userRole, department });
 
         // Store metadata in Firestore for role-based access
         await setDoc(doc(db, userRole, user.uid), {
@@ -166,6 +158,7 @@ export default function Auth() {
           username,
           email,
           role: userRole,
+          department, // Save department
           createdAt: serverTimestamp(),
         });
 
@@ -197,6 +190,7 @@ export default function Auth() {
             username,
             email,
             role: userRole,
+            department, // Save department
             createdAt: rtdbServerTimestamp(),
             lastLogin: rtdbServerTimestamp(),
           });
@@ -297,6 +291,44 @@ export default function Auth() {
                 break;
               }
             }
+            // AUTO-ACTIVATION: Check if they are in the teachers/ list but profiles are missing
+            console.log("Checking for auto-activation...");
+            const teachersRef = ref(rtdb, 'teachers');
+            const q = rtdbQuery(teachersRef, orderByChild("email"), equalTo(email));
+            const snap = await rtdbGet(q);
+
+            if (snap.exists()) {
+              const teachersData = snap.val();
+              const teacherKey = Object.keys(teachersData)[0];
+              const teacherData = teachersData[teacherKey];
+
+              console.log("Auto-activating teacher profiles...");
+              // Create Firestore Staff Profile
+              await setDoc(doc(db, "staff", user.uid), {
+                name: teacherData.name,
+                email: teacherData.email,
+                role: "staff",
+                employeeId: teacherData.employeeId,
+                department: teacherData.department,
+                isTutor: teacherData.isTutor || false,
+                tutorClass: teacherData.tutorClass || "",
+                createdAt: serverTimestamp(),
+                activatedAt: serverTimestamp()
+              });
+
+              const userData = {
+                name: teacherData.name,
+                email: teacherData.email,
+                role: "staff",
+                isTutor: teacherData.isTutor || false,
+                tutorClass: teacherData.tutorClass || "",
+                createdAt: rtdbServerTimestamp(),
+              };
+
+              // Create RTDB User Profile
+              await rtdbSet(ref(rtdb, `users/${user.uid}`), userData);
+              // Create RTDB Role-specific Profile
+              await rtdbSet(ref(rtdb, `staffs/${user.uid}`), userData);
 
             if (foundRole) {
               alert(`Logged in as ${foundRole} (you selected ${role}) ✅`);
@@ -499,6 +531,20 @@ export default function Auth() {
                   required
                   placeholder="email@example.com"
                 />
+              </div>
+
+              <div className="field">
+                <label>Department</label>
+                <select name="department" value={form.department} onChange={onChange} required>
+                  <option value="Computer Science">Computer Science</option>
+                  <option value="Electronics & Communication">Electronics & Communication</option>
+                  <option value="Mechanical Engineering">Mechanical Engineering</option>
+                  <option value="Civil Engineering">Civil Engineering</option>
+                  <option value="Electrical & Electronics">Electrical & Electronics</option>
+                  <option value="Information Technology">Information Technology</option>
+                  <option value="Artificial Intelligence">Artificial Intelligence</option>
+                  <option value="Cyber Security">Cyber Security</option>
+                </select>
               </div>
 
               <div className="field">

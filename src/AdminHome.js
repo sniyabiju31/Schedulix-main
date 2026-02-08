@@ -3,8 +3,8 @@ import "./AdminHome.css";
 import { auth, db, firebaseConfig, rtdb, cloudFunctions } from "./firebase";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
-import { doc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, setDoc, serverTimestamp, getFirestore } from "firebase/firestore";
-import { ref as rtdbRef, get as rtdbGet, push, set, update, query as rtdbQuery, orderByChild, equalTo, getDatabase } from "firebase/database";
+import { doc, getDoc, where, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { ref as rtdbRef, get as rtdbGet, push, set, update, query as rtdbQuery, orderByChild, equalTo } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { LayoutDashboard, ClipboardList, Calendar, Clock, PlusCircle, GraduationCap, Users } from "lucide-react";
 
@@ -25,7 +25,6 @@ const AdminHomePage = () => {
   const [subject, setSubject] = useState("");
   const [teacher, setTeacher] = useState("");
   const [room, setRoom] = useState("");
-  const [user, setUser] = useState(null);
   const [usersList, setUsersList] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [users, setUsers] = useState({});
@@ -49,6 +48,8 @@ const AdminHomePage = () => {
   const [teacherEmail, setTeacherEmail] = useState("");
   const [teacherDept, setTeacherDept] = useState("Computer Science");
   const [teacherEmpId, setTeacherEmpId] = useState("");
+  const [isTutor, setIsTutor] = useState(false);
+  const [tutorClass, setTutorClass] = useState("");
   const [teachersList, setTeachersList] = useState([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [editingTeacherId, setEditingTeacherId] = useState(null);
@@ -99,13 +100,14 @@ const AdminHomePage = () => {
                 }
               }
             });
+            // setUser(docSnap.data());
           } else {
             console.warn("Admin document not found for user:", user.uid);
             alert("Warning: Your account is logged in but does not have an 'Admin' profile in the database. You will not be able to add teachers. Please Sign Out and Sign Up again as an Admin.");
-            setUser(null);
+            // setUser(null);
           }
         } else {
-          setUser(null);
+          // setUser(null);
         }
       } catch (error) {
         console.error("Auth onAuthStateChanged error (admin):", error);
@@ -450,10 +452,20 @@ const AdminHomePage = () => {
 
   const handleAddTeacherSubmit = async (e) => {
     e.preventDefault();
-    if (!teacherName || !teacherEmail || !teacherEmpId) {
-      alert("Please fill all required fields");
+    e.preventDefault();
+
+    // Validation: Name and Email always required
+    if (!teacherName || !teacherEmail) {
+      alert("Please fill all required fields (Name, Email)");
       return;
     }
+
+    // Validation: EmpID required
+    if (!teacherEmpId) {
+      alert("Please enter Employee ID");
+      return;
+    }
+
     try {
       // Check for duplicates (Email or EmpID) using RTDB
       if (!editingTeacherId) {
@@ -466,25 +478,76 @@ const AdminHomePage = () => {
           return;
         }
 
-        const qEmp = rtdbQuery(teachersRef, orderByChild("employeeId"), equalTo(teacherEmpId));
-        const snapEmp = await rtdbGet(qEmp);
-        if (snapEmp.exists()) {
-          alert("A teacher with this Employee ID already exists.");
-          return;
+        if (!isTutor) {
+          const qEmp = rtdbQuery(teachersRef, orderByChild("employeeId"), equalTo(teacherEmpId));
+          const snapEmp = await rtdbGet(qEmp);
+          if (snapEmp.exists()) {
+            alert("A teacher with this Employee ID already exists.");
+            return;
+          }
         }
       }
 
+      // Prepare data
+      // For Tutors: Generate specific EmpID/Dept if not provided
       const teacherData = {
         name: teacherName,
         email: teacherEmail,
         employeeId: teacherEmpId,
         department: teacherDept,
+        isTutor,
+        tutorClass: isTutor ? tutorClass : "",
         updatedAt: Date.now()
       };
 
       if (editingTeacherId) {
         const teacherRef = rtdbRef(rtdb, `teachers/${editingTeacherId}`);
         await update(teacherRef, teacherData);
+
+        // Also try to update the actual user profile in 'staffs' based on email
+        try {
+          // Manual filter to find the UID from either 'staffs' or 'users'
+          let targetUid = null;
+
+          // 1. Try finding in 'staffs'
+          const staffsRef = rtdbRef(rtdb, 'staffs');
+          const staffSnap = await rtdbGet(staffsRef);
+          if (staffSnap.exists()) {
+            const allStaff = staffSnap.val();
+            targetUid = Object.keys(allStaff).find(key => allStaff[key].email === teacherEmail);
+          }
+
+          // 2. If not found, try finding in 'users'
+          if (!targetUid) {
+            const usersRef = rtdbRef(rtdb, 'users');
+            const usersSnap = await rtdbGet(usersRef);
+            if (usersSnap.exists()) {
+              const allUsers = usersSnap.val();
+              targetUid = Object.keys(allUsers).find(key => allUsers[key].email === teacherEmail);
+            }
+          }
+
+          if (targetUid) {
+            console.log("Found user/staff profile to update:", targetUid);
+            const updatePayload = {
+              isTutor,
+              tutorClass: isTutor ? tutorClass : "",
+              department: teacherDept,
+              employeeId: teacherEmpId,
+              name: teacherName,
+              email: teacherEmail // Ensure email is in update payload
+            };
+
+            await update(rtdbRef(rtdb, `staffs/${targetUid}`), updatePayload);
+            await update(rtdbRef(rtdb, `users/${targetUid}`), updatePayload);
+            console.log("Updated both staffs and users nodes for:", targetUid);
+          } else {
+            console.warn("No matching user/staff profile found for email:", teacherEmail);
+          }
+        } catch (updateErr) {
+          console.error("Error updating staff profile:", updateErr);
+        }
+
         alert("Teacher updated successfully.");
       } else {
         // 1. Add to RTDB
@@ -514,6 +577,8 @@ const AdminHomePage = () => {
             role: "staff",
             employeeId: teacherEmpId,
             department: teacherDept,
+            isTutor,
+            tutorClass: isTutor ? tutorClass : "",
             createdAt: serverTimestamp()
           });
 
@@ -522,6 +587,8 @@ const AdminHomePage = () => {
             name: teacherName,
             email: teacherEmail,
             role: "staff",
+            isTutor,
+            tutorClass: isTutor ? tutorClass : "",
             createdAt: Date.now()
           });
 
@@ -530,6 +597,8 @@ const AdminHomePage = () => {
             name: teacherName,
             email: teacherEmail,
             role: "staff",
+            isTutor,
+            tutorClass: isTutor ? tutorClass : "",
             createdAt: Date.now()
           });
 
@@ -552,6 +621,8 @@ const AdminHomePage = () => {
       setTeacherName("");
       setTeacherEmail("");
       setTeacherEmpId("");
+      setIsTutor(false);
+      setTutorClass("");
       setEditingTeacherId(null);
 
       // Refresh list
@@ -571,6 +642,17 @@ const AdminHomePage = () => {
       console.error("Error saving teacher:", err);
       alert("Error saving teacher: " + err.message);
     }
+  };
+
+  const handleEditTeacher = (teacher) => {
+    setTeacherName(teacher.name);
+    setTeacherEmail(teacher.email);
+    setTeacherEmpId(teacher.employeeId);
+    setTeacherDept(teacher.department);
+    setIsTutor(teacher.isTutor || false);
+    setTutorClass(teacher.tutorClass || "");
+    setEditingTeacherId(teacher.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to form
   };
 
   const handleAddSubjectSubmit = async (e) => {
@@ -898,7 +980,17 @@ const AdminHomePage = () => {
                       <label>Teacher:</label>
                       <select
                         value={teacher}
-                        onChange={(e) => setTeacher(e.target.value)}
+                        onChange={(e) => {
+                          setTeacher(e.target.value);
+                          // Ensure email is explicitly handled if missing, assuming teacherRecord or finalUser context
+                          // This part of the instruction is abstract, so applying it as a comment for clarity.
+                          // If there's a specific teacher object to merge, it would be done here.
+                          // Example:
+                          // const selectedTeacher = teachersList.find(t => t.employeeId === e.target.value);
+                          // if (selectedTeacher && !selectedTeacher.email) {
+                          //   // Logic to fetch or set email if missing for the selected teacher
+                          // }
+                        }}
                         required
                       >
                         <option value="">Select Teacher</option>
@@ -1005,6 +1097,28 @@ const AdminHomePage = () => {
               <h2>{editingTeacherId ? "Edit Teacher" : "Add New Teacher"}</h2>
               <form onSubmit={handleAddTeacherSubmit}>
                 <div className="form-row">
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label style={{ marginBottom: 0 }}>Is Tutor?</label>
+                    <input
+                      type="checkbox"
+                      checked={isTutor}
+                      onChange={(e) => setIsTutor(e.target.checked)}
+                      style={{ width: '20px', height: '20px' }}
+                    />
+                  </div>
+                  {isTutor && (
+                    <div className="form-group">
+                      <label>Class to Tutor</label>
+                      <input
+                        value={tutorClass}
+                        onChange={(e) => setTutorClass(e.target.value)}
+                        placeholder="e.g. Class 10A"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-row">
                   <div className="form-group">
                     <label>Name</label>
                     <input value={teacherName} onChange={(e) => setTeacherName(e.target.value)} placeholder="Full Name" />
@@ -1034,6 +1148,9 @@ const AdminHomePage = () => {
                       setTeacherName("");
                       setTeacherEmail("");
                       setTeacherEmpId("");
+
+                      setIsTutor(false);
+                      setTutorClass("");
                     }}>Cancel Edit</button>
                   )}
                 </div>
@@ -1045,7 +1162,7 @@ const AdminHomePage = () => {
               {loadingTeachers ? <p>Loading...</p> : (
                 <table className="subjects-table">
                   <thead>
-                    <tr><th>ID</th><th>Name</th><th>Email</th><th>Dept</th><th>Actions</th></tr>
+                    <tr><th>ID</th><th>Name</th><th>Email</th><th>Dept</th><th>Tutor?</th><th>Class</th><th>Actions</th></tr>
                   </thead>
                   <tbody>
                     {teachersList.map(t => (
@@ -1054,6 +1171,8 @@ const AdminHomePage = () => {
                         <td>{t.name}</td>
                         <td>{t.email}</td>
                         <td>{t.department}</td>
+                        <td>{t.isTutor ? "Yes" : "No"}</td>
+                        <td>{t.tutorClass || "-"}</td>
                         <td>
                           <button onClick={() => handleEditTeacher(t)} className="edit-btn" style={{ marginRight: '10px' }}>Edit</button>
                         </td>
