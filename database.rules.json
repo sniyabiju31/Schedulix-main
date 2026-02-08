@@ -1,6 +1,11 @@
 {
   "rules": {
+    ".read": true,
+    ".write": "auth != null",
     "users": {
+      ".indexOn": [
+        "role"
+      ]
       "$uid": {
         ".read": "auth != null",
         ".write": "auth != null",
@@ -26,22 +31,23 @@
         ".write": "auth != null && auth.uid === $uid"
       }
     },
-    "subjects": {
-      ".read": "auth != null",
-      ".write": "auth != null",
+    "students": {
       ".indexOn": [
-        "semester",
-        "code"
+        "email",
+        "rollNo"
       ]
     },
     "teachers": {
-      ".read": "auth != null",
-      ".write": "auth != null",
       ".indexOn": [
         "email",
         "employeeId"
       ]
     },
+    "subjects": {
+      ".indexOn": [
+        "semester",
+        "code"
+      ]
     "preferences": {
       ".read": "auth != null",
       ".write": "auth != null"

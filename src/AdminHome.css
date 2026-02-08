@@ -236,6 +236,7 @@ body {
   /* Terminal font for numbers */
   background: linear-gradient(135deg, #fff 0%, var(--accent-cyan) 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 0 5px rgba(0, 243, 255, 0.4));
 }
@@ -543,4 +544,41 @@ button[type="button"]:hover,
   .stats-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.description {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 25px;
+  line-height: 1.5;
+}
+
+.current-status {
+  border: 1px solid var(--glass-border);
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
+}
+
+.alert-info {
+  background: rgba(0, 243, 255, 0.1);
+  color: var(--accent-cyan);
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.stat-card.danger p {
+  background: linear-gradient(135deg, #fff 0%, #ef4444 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.stat-card.success p {
+  background: linear-gradient(135deg, #fff 0%, #22c55e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
 }
