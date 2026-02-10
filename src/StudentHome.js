@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from "react";
 import "./home.css"; // Reuse staff styles for consistency or create student-specific later
 import { auth, rtdb, db } from "./firebase";
-import { ref, get, set, serverTimestamp } from "firebase/database";
+import { ref, get, set, onValue, serverTimestamp } from "firebase/database";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { User, Calendar, CreditCard, Clock, LogOut } from "lucide-react";
+import { User, Calendar, CreditCard, Clock, LogOut, Edit3 } from "lucide-react";
 
 const StudentHomePage = () => {
     const [activeMenu, setActiveMenu] = useState("timetable");
     const [user, setUser] = useState(null);
     const [timeWindow, setTimeWindow] = useState({ open: false, end: null });
+    const [isEditMode, setIsEditMode] = useState(false);
     const [studentData, setStudentData] = useState({
         name: "",
         email: "",
@@ -33,17 +34,27 @@ const StudentHomePage = () => {
                     setStudentData(prev => ({ ...prev, ...userData }));
                 }
 
-                // Fetch Time Window settings
+                // Real-time Settings Listener
                 const settingsRef = ref(rtdb, "settings/student_update_window");
-                const settingsSnap = await get(settingsRef);
-                if (settingsSnap.exists()) {
-                    const windowData = settingsSnap.val();
-                    const now = Date.now();
-                    setTimeWindow({
-                        open: now >= windowData.start && now <= windowData.end,
-                        end: windowData.end
-                    });
-                }
+                const settingsUnsubscribe = onValue(settingsRef, (snapshot) => {
+                    if (snapshot.exists()) {
+                        const windowData = snapshot.val();
+                        const now = Date.now();
+                        const isWithinWindow = now >= windowData.start && now <= windowData.end;
+                        const isManuallyUnlocked = windowData.isUnlocked || false;
+                        const isOpen = isWithinWindow || isManuallyUnlocked;
+
+                        setTimeWindow({
+                            open: isOpen,
+                            end: windowData.end
+                        });
+
+                        // If it closes while we are editing, force exit edit mode
+                        if (!isOpen) {
+                            setIsEditMode(false);
+                        }
+                    }
+                });
 
                 // Fetch Fees Data
                 const feesRef = ref(rtdb, `fees/${u.uid}`);
@@ -62,6 +73,7 @@ const StudentHomePage = () => {
                     }
                 }
                 setLoading(false);
+                return () => settingsUnsubscribe();
             } else {
                 window.location.href = "/";
             }
@@ -125,17 +137,47 @@ const StudentHomePage = () => {
             <main className="content">
                 {activeMenu === "profile" && (
                     <div className="profile-section">
-                        <h1>Personal Details</h1>
+                        <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h1 style={{ margin: 0 }}>Personal Details</h1>
+                            {timeWindow.open && (
+                                <button
+                                    className={`edit-toggle-btn ${isEditMode ? 'active' : ''}`}
+                                    onClick={() => setIsEditMode(!isEditMode)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '10px 20px',
+                                        borderRadius: '8px',
+                                        border: isEditMode ? '1px solid var(--accent-violet)' : '1px solid var(--glass-border)',
+                                        background: isEditMode ? 'rgba(188, 19, 254, 0.1)' : 'rgba(255,255,255,0.05)',
+                                        color: isEditMode ? 'var(--accent-violet)' : 'var(--text-secondary)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s ease',
+                                        fontWeight: '600'
+                                    }}
+                                >
+                                    <Edit3 size={18} /> {isEditMode ? "Cancel Editing" : "Edit Profile"}
+                                </button>
+                            )}
+                        </div>
+
                         {!timeWindow.open && (
                             <div className="alert-info">
                                 <Clock size={16} /> Update window is closed. View-only mode.
                             </div>
                         )}
+                        {timeWindow.open && !isEditMode && (
+                            <div className="alert-info success" style={{ background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
+                                <Edit3 size={16} /> Editing is enabled. Click 'Edit Profile' to make changes.
+                            </div>
+                        )}
+
                         <form onSubmit={handleDataSubmit} className="student-form">
                             <div className="form-grid">
                                 <div className="form-group">
                                     <label>Name</label>
-                                    <input name="name" value={studentData.name} onChange={handleDataChange} disabled={!timeWindow.open} />
+                                    <input name="name" value={studentData.name} onChange={handleDataChange} disabled={!isEditMode} />
                                 </div>
                                 <div className="form-group">
                                     <label>Email</label>
@@ -163,14 +205,14 @@ const StudentHomePage = () => {
                                 </div>
                                 <div className="form-group">
                                     <label>Phone</label>
-                                    <input name="phone" value={studentData.phone || ""} onChange={handleDataChange} disabled={!timeWindow.open} />
+                                    <input name="phone" value={studentData.phone || ""} onChange={handleDataChange} disabled={!isEditMode} />
                                 </div>
                                 <div className="form-group">
                                     <label>Address</label>
-                                    <textarea name="address" value={studentData.address || ""} onChange={handleDataChange} disabled={!timeWindow.open}></textarea>
+                                    <textarea name="address" value={studentData.address || ""} onChange={handleDataChange} disabled={!isEditMode}></textarea>
                                 </div>
                             </div>
-                            {timeWindow.open && <button type="submit" className="save-btn">Save Changes</button>}
+                            {isEditMode && <button type="submit" className="save-btn">Save Changes</button>}
                         </form>
                     </div>
                 )}
