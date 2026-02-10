@@ -65,6 +65,7 @@ const AdminHomePage = () => {
   const [editingStudentId, setEditingStudentId] = useState(null);
   const [studentsList, setStudentsList] = useState([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [studentSortBy, setStudentSortBy] = useState('department');
 
   // Settings State
   const [windowStart, setWindowStart] = useState("");
@@ -1482,13 +1483,28 @@ const AdminHomePage = () => {
             </div>
 
             <div style={{ marginTop: 30 }}>
-              <h2>All Students</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <h2>All Students</h2>
+                <div className="selector">
+                  <label>Sort by:</label>
+                  <select value={studentSortBy} onChange={(e) => setStudentSortBy(e.target.value)}>
+                    <option value="department">Department</option>
+                    <option value="name">Name (A-Z)</option>
+                  </select>
+                </div>
+              </div>
               <table className="subjects-table">
                 <thead>
                   <tr><th>Roll No</th><th>Name</th><th>Email</th><th>Dept</th><th>Sem</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
-                  {studentsList.map(s => (
+                  {[...studentsList].sort((a, b) => {
+                    if (studentSortBy === 'name') {
+                      return (a.name || "").localeCompare(b.name || "");
+                    }
+                    // Default sort: Department then Name
+                    return (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "");
+                  }).map(s => (
                     <tr key={s.id}>
                       <td>{s.rollNo}</td>
                       <td>{s.name}</td>
