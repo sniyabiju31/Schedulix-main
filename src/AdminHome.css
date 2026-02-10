@@ -414,9 +414,20 @@ body {
 
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 20px;
   margin-bottom: 20px;
+}
+
+.form-row.cols-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.form-row.cols-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.form-row.cols-7-3 {
+  grid-template-columns: 2fr 1fr;
 }
 
 .form-group label {

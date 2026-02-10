@@ -5,17 +5,17 @@
     "users": {
       ".indexOn": [
         "role"
-      ]
+      ],
       "$uid": {
         ".read": "auth != null",
         ".write": "auth != null",
-        ".validate": "newData.hasChildren(['email','name','role','createdAt']) && newData.child('email').isString() && newData.child('name').isString() && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'staff')"
+        ".validate": "newData.hasChildren(['email','name','role','createdAt']) && newData.child('email').isString() && newData.child('name').isString() && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'staff' || newData.child('role').val() === 'student')"
       }
     },
     "admins": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": false
+        ".write": "auth != null && auth.uid === $uid"
       }
     },
     "staffs": {
@@ -48,6 +48,7 @@
         "semester",
         "code"
       ]
+    },
     "preferences": {
       ".read": "auth != null",
       ".write": "auth != null"

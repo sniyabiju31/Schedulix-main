@@ -41,8 +41,11 @@ const AdminHomePage = () => {
   const [department, setDepartment] = useState("Computer Science");
   const [credits, setCredits] = useState("");
   const [teachingHours, setTeachingHours] = useState("");
+
+  const [subjectType, setSubjectType] = useState("Theory");
   const [subjectsList, setSubjectsList] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [editingSubjectId, setEditingSubjectId] = useState(null);
 
   // Teachers management
   const [teacherName, setTeacherName] = useState("");
@@ -729,30 +732,49 @@ const AdminHomePage = () => {
       const qCheck = rtdbQuery(subjectsRef, orderByChild("code"), equalTo(subjectCode.trim()));
       const snapCheck = await rtdbGet(qCheck);
 
-      if (snapCheck.exists()) {
-        alert(`Subject code "${subjectCode.trim()}" already exists. Please use a unique code.`);
-        return;
+      if (snapCheck.exists() && (!editingSubjectId || (editingSubjectId && Object.keys(snapCheck.val())[0] !== editingSubjectId))) {
+        // If editing, allow same code if it belongs to current subject
+        // But here key check is simplified. Better: check keys.
+        // Actually, snapCheck returns object of matches. If any match ID != editingSubjectId, then duplicate.
+        const matchId = Object.keys(snapCheck.val())[0];
+        if (matchId !== editingSubjectId) {
+          alert(`Subject code "${subjectCode.trim()}" already exists. Please use a unique code.`);
+          return;
+        }
       }
 
-      // Add to RTDB
-      const newSubjectRef = push(subjectsRef);
-      await set(newSubjectRef, {
+      const subjectData = {
         semester,
         name: subjectName.trim(),
         code: subjectCode.trim(),
         department,
         credits: Number(credits) || 0,
         teachingHours: Number(teachingHours) || 0,
-        createdAt: Date.now()
-      });
+        type: subjectType,
+        updatedAt: Date.now()
+      };
 
-      alert("Subject added successfully.");
+      if (editingSubjectId) {
+        // Update existing
+        await update(rtdbRef(rtdb, `subjects/${editingSubjectId}`), subjectData);
+        alert("Subject updated successfully.");
+        setEditingSubjectId(null);
+      } else {
+        // Create new
+        const newSubjectRef = push(subjectsRef);
+        await set(newSubjectRef, {
+          ...subjectData,
+          createdAt: Date.now()
+        });
+        alert("Subject added successfully.");
+      }
+
       // Clear fields and refetch
       setSubjectName("");
       setSubjectCode("");
-      setDepartment("Computer Science");
       setCredits("");
       setTeachingHours("");
+      setSubjectType("Theory");
 
       // Refresh list (re-fetch)
       const q = rtdbQuery(subjectsRef, orderByChild('semester'), equalTo(semester));
@@ -769,8 +791,41 @@ const AdminHomePage = () => {
       }
 
     } catch (err) {
-      console.error("Add subject error:", err);
-      alert(`Add subject error: ${err.message || err}`);
+      console.error("Add/Update subject error:", err);
+      alert(`Error: ${err.message || err}`);
+    }
+  };
+
+  const handleEditSubject = (subject) => {
+    setEditingSubjectId(subject.id);
+    setSubjectName(subject.name);
+    setSubjectCode(subject.code);
+    setDepartment(subject.department);
+    setSemester(subject.semester);
+    setCredits(subject.credits);
+    setTeachingHours(subject.teachingHours);
+    setSubjectType(subject.type || "Theory");
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteSubject = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this subject?")) return;
+    try {
+      await remove(rtdbRef(rtdb, `subjects/${id}`));
+      // Refresh list
+      const q = rtdbQuery(rtdbRef(rtdb, 'subjects'), orderByChild('semester'), equalTo(semester));
+      const snap = await rtdbGet(q);
+      if (snap.exists()) {
+        const data = snap.val();
+        const items = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        setSubjectsList(items);
+      } else {
+        setSubjectsList([]);
+      }
+      alert("Subject deleted.");
+    } catch (err) {
+      console.error("Delete subject error:", err);
+      alert("Error deleting subject: " + err.message);
     }
   };
 
@@ -1144,34 +1199,45 @@ const AdminHomePage = () => {
 
         {activeMenu === "add-subject" && (
           <div className="add-subject-section">
-            <h1>Add Subject</h1>
+            <h1>{editingSubjectId ? "Edit Subject" : "Add Subject"}</h1>
             <div className="form-container" style={{ maxWidth: '700px' }}>
               <form onSubmit={handleAddSubjectSubmit}>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Semester</label>
-                    <select value={semester} onChange={(e) => setSemester(e.target.value)}>
-                      {Array.from({ length: 8 }, (_, i) => `Semester ${i + 1}`).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Subject Name</label>
-                    <input type="text" value={subjectName} onChange={(e) => setSubjectName(e.target.value)} placeholder="Subject name" />
-                  </div>
-                </div>
-
-                <div className="form-row">
+                {/* Row 1: Context (Dept & Semester) */}
+                <div className="form-row cols-2">
                   <div className="form-group">
                     <label>Department</label>
                     <select value={department} onChange={(e) => setDepartment(e.target.value)}>
                       {departments.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
+                  <div className="form-group">
+                    <label>Semester</label>
+                    <select value={semester} onChange={(e) => setSemester(e.target.value)}>
+                      {Array.from({ length: 8 }, (_, i) => `Semester ${i + 1}`).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div className="form-row">
+
+                {/* Row 2: Identity (Name & Code) */}
+                <div className="form-row cols-7-3">
+                  <div className="form-group">
+                    <label>Subject Name</label>
+                    <input type="text" value={subjectName} onChange={(e) => setSubjectName(e.target.value)} placeholder="e.g. Data Structures" />
+                  </div>
                   <div className="form-group">
                     <label>Subject Code</label>
-                    <input type="text" value={subjectCode} onChange={(e) => setSubjectCode(e.target.value)} placeholder="e.g. MATH101" />
+                    <input type="text" value={subjectCode} onChange={(e) => setSubjectCode(e.target.value)} placeholder="e.g. CS101" />
+                  </div>
+                </div>
+
+                {/* Row 3: Details (Type, Credits, Hours) */}
+                <div className="form-row cols-3">
+                  <div className="form-group">
+                    <label>Type</label>
+                    <select value={subjectType} onChange={(e) => setSubjectType(e.target.value)}>
+                      <option value="Theory">Theory</option>
+                      <option value="Lab">Lab</option>
+                    </select>
                   </div>
                   <div className="form-group">
                     <label>Credits</label>
@@ -1183,8 +1249,13 @@ const AdminHomePage = () => {
                   </div>
                 </div>
                 <div className="form-buttons">
-                  <button type="submit">Add Subject</button>
-                  <button type="button" onClick={() => { setSubjectName(''); setSubjectCode(''); setCredits(''); setTeachingHours(''); }}>Clear</button>
+                  <button type="submit">{editingSubjectId ? "Update Subject" : "Add Subject"}</button>
+                  <button type="button" onClick={() => {
+                    setSubjectName(''); setSubjectCode(''); setCredits(''); setTeachingHours(''); setSubjectType('Theory');
+                    setEditingSubjectId(null);
+                  }}>
+                    {editingSubjectId ? "Cancel Edit" : "Clear"}
+                  </button>
                 </div>
               </form>
             </div>
@@ -1194,7 +1265,7 @@ const AdminHomePage = () => {
               {loadingSubjects ? <p>Loading...</p> : subjectsList.length === 0 ? <p>No subjects for this semester.</p> : (
                 <table className="subjects-table">
                   <thead>
-                    <tr><th>Code</th><th>Name</th><th>Department</th><th>Credits</th><th>Hours</th></tr>
+                    <tr><th>Code</th><th>Name</th><th>Department</th><th>Type</th><th>Credits</th><th>Hours</th><th>Actions</th></tr>
                   </thead>
                   <tbody>
                     {subjectsList.map(s => (
@@ -1202,8 +1273,13 @@ const AdminHomePage = () => {
                         <td>{s.code}</td>
                         <td>{s.name}</td>
                         <td>{s.department || ''}</td>
+                        <td>{s.type || 'Theory'}</td>
                         <td>{s.credits}</td>
                         <td>{s.teachingHours}</td>
+                        <td>
+                          <button onClick={() => handleEditSubject(s)} className="edit-btn" style={{ marginRight: '10px' }}>Edit</button>
+                          <button onClick={() => handleDeleteSubject(s.id)} className="edit-btn" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }}>Delete</button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
