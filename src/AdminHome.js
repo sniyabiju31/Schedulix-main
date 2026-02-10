@@ -4,7 +4,7 @@ import { auth, db, firebaseConfig, rtdb, cloudFunctions } from "./firebase";
 import { initializeApp, deleteApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc, where, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { ref as rtdbRef, get as rtdbGet, push, set, update, query as rtdbQuery, orderByChild, equalTo } from "firebase/database";
+import { ref as rtdbRef, get as rtdbGet, push, set, update, remove, query as rtdbQuery, orderByChild, equalTo } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { LayoutDashboard, ClipboardList, Calendar, Clock, PlusCircle, GraduationCap, Users } from "lucide-react";
 
@@ -16,6 +16,7 @@ const teachers = ["Mr. Smith", "Ms. Johnson", "Mr. Davis", "Ms. Wilson", "Mr. Br
 const departments = ["Computer Science", "Electronics & Communication", "Mechanical Engineering", "Civil Engineering", "Electrical & Electronics", "Information Technology", "Artificial Intelligence", "Cyber Security"];
 
 const AdminHomePage = () => {
+  const [user, setUser] = useState(null);
   const [activeMenu, setActiveMenu] = useState("overview");
   const [selectedDept, setSelectedDept] = useState(departments[0]);
   const [selectedSemester, setSelectedSemester] = useState("Semester 1");
@@ -50,6 +51,7 @@ const AdminHomePage = () => {
   const [teacherEmpId, setTeacherEmpId] = useState("");
   const [isTutor, setIsTutor] = useState(false);
   const [tutorClass, setTutorClass] = useState("");
+  const [isAdmissionDuty, setIsAdmissionDuty] = useState(false);
   const [teachersList, setTeachersList] = useState([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [editingTeacherId, setEditingTeacherId] = useState(null);
@@ -85,7 +87,7 @@ const AdminHomePage = () => {
               if (snap.exists()) {
                 const data = snap.val();
                 setStudents(data);
-                setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })));
+                setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a, b) => (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "")));
               }
             });
 
@@ -95,8 +97,10 @@ const AdminHomePage = () => {
                 const data = snap.val();
                 setSettings(data);
                 if (data.student_update_window) {
-                  setWindowStart(new Date(data.student_update_window.start).toISOString().slice(0, 16));
-                  setWindowEnd(new Date(data.student_update_window.end).toISOString().slice(0, 16));
+                  const startTs = Number(data.student_update_window.start);
+                  const endTs = Number(data.student_update_window.end);
+                  if (startTs && !isNaN(startTs)) setWindowStart(new Date(startTs).toISOString().slice(0, 16));
+                  if (endTs && !isNaN(endTs)) setWindowEnd(new Date(endTs).toISOString().slice(0, 16));
                 }
               }
             });
@@ -333,14 +337,7 @@ const AdminHomePage = () => {
     return () => { mounted = false; };
   }, [activeMenu]);
 
-  const handleEditTeacher = (teacher) => {
-    setTeacherName(teacher.name);
-    setTeacherEmail(teacher.email);
-    setTeacherEmpId(teacher.employeeId);
-    setTeacherDept(teacher.department);
-    setEditingTeacherId(teacher.id);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to form
-  };
+
 
   const handleEditStudent = (student) => {
     setEditingStudentId(student.id);
@@ -425,7 +422,7 @@ const AdminHomePage = () => {
       const snap = await rtdbGet(rtdbRef(rtdb, 'students'));
       if (snap.exists()) {
         const data = snap.val();
-        setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })));
+        setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a, b) => (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "")));
       }
 
       setStudentName(""); setStudentEmail(""); setStudentRollNo(""); setEditingStudentId(null);
@@ -488,6 +485,30 @@ const AdminHomePage = () => {
         }
       }
 
+      // Check Admission Duty limit (Max 2 per department)
+      if (isAdmissionDuty) {
+        const teachersRef = rtdbRef(rtdb, 'teachers');
+        const qDept = rtdbQuery(teachersRef, orderByChild("department"), equalTo(teacherDept));
+        const snapDept = await rtdbGet(qDept);
+
+        let currentDutyCount = 0;
+        if (snapDept.exists()) {
+          const data = snapDept.val();
+          Object.keys(data).forEach((key) => {
+            // Exclude current teacher if editing
+            if (editingTeacherId && key === editingTeacherId) return;
+            if (data[key].isAdmissionDuty) {
+              currentDutyCount++;
+            }
+          });
+        }
+
+        if (currentDutyCount >= 2) {
+          alert(`Limit Reached: The ${teacherDept} department already has 2 staff members assigned to Admission Duty.`);
+          return;
+        }
+      }
+
       // Prepare data
       // For Tutors: Generate specific EmpID/Dept if not provided
       const teacherData = {
@@ -495,6 +516,7 @@ const AdminHomePage = () => {
         email: teacherEmail,
         employeeId: teacherEmpId,
         department: teacherDept,
+        isAdmissionDuty,
         isTutor,
         tutorClass: isTutor ? tutorClass : "",
         updatedAt: Date.now()
@@ -530,6 +552,7 @@ const AdminHomePage = () => {
           if (targetUid) {
             console.log("Found user/staff profile to update:", targetUid);
             const updatePayload = {
+              isAdmissionDuty,
               isTutor,
               tutorClass: isTutor ? tutorClass : "",
               department: teacherDept,
@@ -577,6 +600,7 @@ const AdminHomePage = () => {
             role: "staff",
             employeeId: teacherEmpId,
             department: teacherDept,
+            isAdmissionDuty,
             isTutor,
             tutorClass: isTutor ? tutorClass : "",
             createdAt: serverTimestamp()
@@ -623,6 +647,7 @@ const AdminHomePage = () => {
       setTeacherEmpId("");
       setIsTutor(false);
       setTutorClass("");
+      setIsAdmissionDuty(false);
       setEditingTeacherId(null);
 
       // Refresh list
@@ -651,6 +676,7 @@ const AdminHomePage = () => {
     setTeacherDept(teacher.department);
     setIsTutor(teacher.isTutor || false);
     setTutorClass(teacher.tutorClass || "");
+    setIsAdmissionDuty(teacher.isAdmissionDuty || false);
     setEditingTeacherId(teacher.id);
     window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to form
   };
@@ -767,6 +793,67 @@ const AdminHomePage = () => {
     setSubject("");
     setTeacher("");
     setRoom("");
+  };
+
+  const handleDeleteTeacher = async () => {
+    if (!editingTeacherId) return;
+    if (!window.confirm("Are you sure you want to delete this teacher?")) return;
+    try {
+      await remove(rtdbRef(rtdb, `teachers/${editingTeacherId}`));
+      alert("Teacher deleted successfully.");
+      setEditingTeacherId(null);
+      setTeacherName("");
+      setTeacherEmail("");
+      setTeacherEmpId("");
+      setTeacherDept("Computer Science"); // Reset to default if needed, or keep existing
+      setIsTutor(false);
+      setTutorClass("");
+      setIsAdmissionDuty(false);
+
+      const teachersRef = rtdbRef(rtdb, 'teachers');
+      const snap = await rtdbGet(teachersRef);
+      if (snap.exists()) {
+        const data = snap.val();
+        const items = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setTeachersList(items);
+      } else {
+        setTeachersList([]);
+      }
+    } catch (err) {
+      alert("Error deleting teacher: " + err.message);
+    }
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!editingStudentId) return;
+    if (!window.confirm("Are you sure you want to delete this student?")) return;
+    try {
+      if (editingStudentId) {
+        await remove(rtdbRef(rtdb, `students/${editingStudentId}`));
+        alert("Student deleted successfully.");
+      }
+
+      setEditingStudentId(null);
+      setStudentName("");
+      setStudentEmail("");
+      setStudentRollNo("");
+      setStudentDept("CSE");
+      setStudentSemester("1");
+      setStudentTotalFees(0);
+
+      const snap = await rtdbGet(rtdbRef(rtdb, 'students'));
+      if (snap.exists()) {
+        const data = snap.val();
+        setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a, b) => (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "")));
+      } else {
+        setStudentsList([]);
+      }
+    } catch (err) {
+      alert("Error deleting student: " + err.message);
+    }
   };
 
   return (
@@ -1098,11 +1185,20 @@ const AdminHomePage = () => {
               <form onSubmit={handleAddTeacherSubmit}>
                 <div className="form-row">
                   <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <label style={{ marginBottom: 0 }}>Is Tutor?</label>
+                    <label style={{ marginBottom: 0 }}>Tutor</label>
                     <input
                       type="checkbox"
                       checked={isTutor}
                       onChange={(e) => setIsTutor(e.target.checked)}
+                      style={{ width: '20px', height: '20px' }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label style={{ marginBottom: 0 }}>Admission Duty</label>
+                    <input
+                      type="checkbox"
+                      checked={isAdmissionDuty}
+                      onChange={(e) => setIsAdmissionDuty(e.target.checked)}
                       style={{ width: '20px', height: '20px' }}
                     />
                   </div>
@@ -1151,7 +1247,11 @@ const AdminHomePage = () => {
 
                       setIsTutor(false);
                       setTutorClass("");
+                      setIsAdmissionDuty(false);
                     }}>Cancel Edit</button>
+                  )}
+                  {editingTeacherId && (
+                    <button type="button" onClick={handleDeleteTeacher} style={{ marginLeft: '10px', background: '#dc3545', color: 'white' }}>Delete</button>
                   )}
                 </div>
               </form>
@@ -1162,7 +1262,7 @@ const AdminHomePage = () => {
               {loadingTeachers ? <p>Loading...</p> : (
                 <table className="subjects-table">
                   <thead>
-                    <tr><th>ID</th><th>Name</th><th>Email</th><th>Dept</th><th>Tutor?</th><th>Class</th><th>Actions</th></tr>
+                    <tr><th>ID</th><th>Name</th><th>Email</th><th>Dept</th><th>Tutor?</th><th>Class</th><th>Adm. Duty?</th><th>Actions</th></tr>
                   </thead>
                   <tbody>
                     {teachersList.map(t => (
@@ -1173,6 +1273,7 @@ const AdminHomePage = () => {
                         <td>{t.department}</td>
                         <td>{t.isTutor ? "Yes" : "No"}</td>
                         <td>{t.tutorClass || "-"}</td>
+                        <td>{t.isAdmissionDuty ? "Yes" : "No"}</td>
                         <td>
                           <button onClick={() => handleEditTeacher(t)} className="edit-btn" style={{ marginRight: '10px' }}>Edit</button>
                         </td>
@@ -1337,6 +1438,9 @@ const AdminHomePage = () => {
                     <button type="button" onClick={() => {
                       setEditingStudentId(null); setStudentName(""); setStudentEmail(""); setStudentRollNo("");
                     }}>Cancel Edit</button>
+                  )}
+                  {editingStudentId && (
+                    <button type="button" onClick={handleDeleteStudent} style={{ marginLeft: '10px', background: '#dc3545', color: 'white' }}>Delete</button>
                   )}
                 </div>
               </form>

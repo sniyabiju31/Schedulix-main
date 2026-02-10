@@ -132,7 +132,7 @@ export default function Auth() {
               updatedAt: rtdbServerTimestamp(),
             }, { merge: true });
 
-            alert("Account activation confirmed! Logging you in...");
+            // alert("Account activation confirmed! Logging you in...");
             window.location.href = role === "admin" ? "/admin-home" : role === "staff" ? "/staff-home" : "/student-home";
           } else {
             throw authErr;
@@ -246,7 +246,7 @@ export default function Auth() {
           // Non-blocking — audit failure shouldn't block signup
         }
 
-        alert(`Signed up as ${userRole.toUpperCase()} — stored in '${userRole}' collection and RTDB.`);
+        // alert(`Signed up as ${userRole.toUpperCase()} — stored in '${userRole}' collection and RTDB.`);
         if (userRole === "admin") window.location.href = "/admin-home";
         else if (userRole === "staff") window.location.href = "/staff-home";
         else window.location.href = "/student-home";
@@ -279,7 +279,7 @@ export default function Auth() {
               await rtdbSet(ref(rtdb, `students/${user.uid}/lastLogin`), rtdbServerTimestamp());
             }
 
-            alert(`${role} login successful ✅`);
+            // alert(`${role} login successful ✅`);
             if (role === "admin") window.location.href = "/admin-home";
             else if (role === "staff") window.location.href = "/staff-home";
             else window.location.href = "/student-home";
@@ -291,47 +291,10 @@ export default function Auth() {
                 break;
               }
             }
-            // AUTO-ACTIVATION: Check if they are in the teachers/ list but profiles are missing
-            console.log("Checking for auto-activation...");
-            const teachersRef = ref(rtdb, 'teachers');
-            const q = rtdbQuery(teachersRef, orderByChild("email"), equalTo(email));
-            const snap = await rtdbGet(q);
 
-            if (snap.exists()) {
-              const teachersData = snap.val();
-              const teacherKey = Object.keys(teachersData)[0];
-              const teacherData = teachersData[teacherKey];
-
-              console.log("Auto-activating teacher profiles...");
-              // Create Firestore Staff Profile
-              await setDoc(doc(db, "staff", user.uid), {
-                name: teacherData.name,
-                email: teacherData.email,
-                role: "staff",
-                employeeId: teacherData.employeeId,
-                department: teacherData.department,
-                isTutor: teacherData.isTutor || false,
-                tutorClass: teacherData.tutorClass || "",
-                createdAt: serverTimestamp(),
-                activatedAt: serverTimestamp()
-              });
-
-              const userData = {
-                name: teacherData.name,
-                email: teacherData.email,
-                role: "staff",
-                isTutor: teacherData.isTutor || false,
-                tutorClass: teacherData.tutorClass || "",
-                createdAt: rtdbServerTimestamp(),
-              };
-
-              // Create RTDB User Profile
-              await rtdbSet(ref(rtdb, `users/${user.uid}`), userData);
-              // Create RTDB Role-specific Profile
-              await rtdbSet(ref(rtdb, `staffs/${user.uid}`), userData);
 
             if (foundRole) {
-              alert(`Logged in as ${foundRole} (you selected ${role}) ✅`);
+              // alert(`Logged in as ${foundRole} (you selected ${role}) ✅`);
               if (foundRole === "admin") window.location.href = "/admin-home";
               else if (foundRole === "staff") window.location.href = "/staff-home";
               else window.location.href = "/student-home";
@@ -367,7 +330,7 @@ export default function Auth() {
                 await rtdbSet(ref(rtdb, `users/${user.uid}`), userData);
                 await rtdbSet(ref(rtdb, `staffs/${user.uid}`), userData);
 
-                alert("Your account has been automatically activated. Welcome!");
+                // alert("Your account has been automatically activated. Welcome!");
                 window.location.href = "/staff-home";
               } else {
                 // Try students
@@ -415,7 +378,7 @@ export default function Auth() {
                   await rtdbSet(ref(rtdb, `users/${user.uid}/lastLogin`), rtdbServerTimestamp());
                   await rtdbSet(ref(rtdb, `students/${user.uid}/lastLogin`), rtdbServerTimestamp());
 
-                  alert("Your student account has been automatically activated. Welcome!");
+                  // alert("Your student account has been automatically activated. Welcome!");
                   window.location.href = "/student-home";
                 } else {
                   alert(`You are not authorized! ❌`);
