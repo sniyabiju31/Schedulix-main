@@ -15,6 +15,7 @@ const hours = ["9:00-9:50", "9:50-10:40", "10:50-11:40", "11:40-12:30", "1:20-2:
 const classes = ["Class 10A", "Class 10B", "Class 9A", "Class 9B", "Class 8A"];
 const teachers = ["Mr. Smith", "Ms. Johnson", "Mr. Davis", "Ms. Wilson", "Mr. Brown"];
 const departments = ["Computer Science", "Electronics & Communication", "Mechanical Engineering", "Civil Engineering", "Electrical & Electronics", "Information Technology", "Artificial Intelligence", "Cyber Security"];
+const schemes = ["2015 Scheme", "2019 Scheme", "2024 Scheme"];
 
 const AdminHomePage = () => {
   const [user, setUser] = useState(null);
@@ -46,6 +47,7 @@ const AdminHomePage = () => {
   const [teachingHours, setTeachingHours] = useState("");
 
   const [subjectType, setSubjectType] = useState("Theory");
+  const [subjectScheme, setSubjectScheme] = useState(schemes[schemes.length - 1]);
   const [subjectsList, setSubjectsList] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [editingSubjectId, setEditingSubjectId] = useState(null);
@@ -67,6 +69,15 @@ const AdminHomePage = () => {
   const [studentRollNo, setStudentRollNo] = useState("");
   const [studentDept, setStudentDept] = useState("CSE");
   const [studentSemester, setStudentSemester] = useState("1");
+  const [studentDivision, setStudentDivision] = useState("A");
+  const [studentDOB, setStudentDOB] = useState("");
+  const [studentFatherName, setStudentFatherName] = useState("");
+  const [studentMotherName, setStudentMotherName] = useState("");
+  const [studentReligion, setStudentReligion] = useState("");
+  const [studentCaste, setStudentCaste] = useState("");
+  const [studentPhone, setStudentPhone] = useState("");
+  const [studentGuardianName, setStudentGuardianName] = useState("");
+  const [studentGuardianAddress, setStudentGuardianAddress] = useState("");
   const [studentTotalFees, setStudentTotalFees] = useState(0);
   const [editingStudentId, setEditingStudentId] = useState(null);
   const [studentsList, setStudentsList] = useState([]);
@@ -495,6 +506,15 @@ const AdminHomePage = () => {
     setStudentRollNo(student.rollNo || '');
     setStudentDept(student.department);
     setStudentSemester(student.semester);
+    setStudentDivision(student.division || "A");
+    setStudentDOB(student.dob || "");
+    setStudentFatherName(student.fatherName || "");
+    setStudentMotherName(student.motherName || "");
+    setStudentReligion(student.religion || "");
+    setStudentCaste(student.caste || "");
+    setStudentPhone(student.phone || "");
+    setStudentGuardianName(student.guardianName || "");
+    setStudentGuardianAddress(student.guardianAddress || "");
     setStudentTotalFees(student.totalFees || 0);
     setActiveMenu("students");
   };
@@ -512,6 +532,15 @@ const AdminHomePage = () => {
         rollNo: studentRollNo,
         department: studentDept,
         semester: studentSemester,
+        division: studentDivision,
+        dob: studentDOB,
+        fatherName: studentFatherName,
+        motherName: studentMotherName,
+        religion: studentReligion,
+        caste: studentCaste,
+        phone: studentPhone,
+        guardianName: studentGuardianName,
+        guardianAddress: studentGuardianAddress,
         totalFees: Number(studentTotalFees),
         updatedAt: Date.now()
       };
@@ -546,6 +575,7 @@ const AdminHomePage = () => {
             role: "student",
             department: studentDept,
             semester: studentSemester,
+            division: studentDivision,
             createdAt: Date.now()
           });
 
@@ -574,7 +604,13 @@ const AdminHomePage = () => {
         setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a, b) => (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "")));
       }
 
-      setStudentName(""); setStudentEmail(""); setStudentRollNo(""); setEditingStudentId(null);
+      setStudentName(""); setStudentEmail(""); setStudentRollNo("");
+      setStudentDivision("A"); setStudentDOB("");
+      setStudentFatherName(""); setStudentMotherName("");
+      setStudentReligion(""); setStudentCaste(""); setStudentPhone("");
+      setStudentGuardianName(""); setStudentGuardianAddress("");
+      setStudentTotalFees(0);
+      setEditingStudentId(null);
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -887,6 +923,7 @@ const AdminHomePage = () => {
         credits: Number(credits) || 0,
         teachingHours: Number(teachingHours) || 0,
         type: subjectType,
+        scheme: subjectScheme,
         updatedAt: Date.now()
       };
 
@@ -911,6 +948,7 @@ const AdminHomePage = () => {
       setCredits("");
       setTeachingHours("");
       setSubjectType("Theory");
+      setSubjectScheme(schemes[schemes.length - 1]);
 
       // Refresh list (re-fetch)
       const q = rtdbQuery(subjectsRef, orderByChild('semester'), equalTo(semester));
@@ -1069,6 +1107,7 @@ const AdminHomePage = () => {
     setCredits(subject.credits);
     setTeachingHours(subject.teachingHours);
     setSubjectType(subject.type || "Theory");
+    setSubjectScheme(subject.scheme || schemes[schemes.length - 1]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1199,6 +1238,15 @@ const AdminHomePage = () => {
       setStudentRollNo("");
       setStudentDept("CSE");
       setStudentSemester("1");
+      setStudentDivision("A");
+      setStudentDOB("");
+      setStudentFatherName("");
+      setStudentMotherName("");
+      setStudentReligion("");
+      setStudentCaste("");
+      setStudentPhone("");
+      setStudentGuardianName("");
+      setStudentGuardianAddress("");
       setStudentTotalFees(0);
 
       const snap = await rtdbGet(rtdbRef(rtdb, 'students'));
@@ -1623,10 +1671,21 @@ const AdminHomePage = () => {
                     <input type="number" min="0" value={teachingHours} onChange={(e) => setTeachingHours(e.target.value)} placeholder="Hours" />
                   </div>
                 </div>
+
+                {/* Row 4: Scheme */}
+                <div className="form-row cols-1">
+                  <div className="form-group">
+                    <label>Scheme</label>
+                    <select value={subjectScheme} onChange={(e) => setSubjectScheme(e.target.value)}>
+                      {schemes.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
                 <div className="form-buttons">
                   <button type="submit">{editingSubjectId ? "Update Subject" : "Add Subject"}</button>
                   <button type="button" onClick={() => {
                     setSubjectName(''); setSubjectCode(''); setCredits(''); setTeachingHours(''); setSubjectType('Theory');
+                    setSubjectScheme(schemes[schemes.length - 1]);
                     setEditingSubjectId(null);
                   }}>
                     {editingSubjectId ? "Cancel Edit" : "Clear"}
@@ -1640,7 +1699,7 @@ const AdminHomePage = () => {
               {loadingSubjects ? <p>Loading...</p> : subjectsList.length === 0 ? <p>No subjects for this semester.</p> : (
                 <table className="subjects-table">
                   <thead>
-                    <tr><th>Code</th><th>Name</th><th>Department</th><th>Type</th><th>Credits</th><th>Hours</th><th>Actions</th></tr>
+                    <tr><th>Code</th><th>Name</th><th>Department</th><th>Scheme</th><th>Type</th><th>Credits</th><th>Hours</th><th>Actions</th></tr>
                   </thead>
                   <tbody>
                     {subjectsList.map(s => (
@@ -1648,6 +1707,7 @@ const AdminHomePage = () => {
                         <td>{s.code}</td>
                         <td>{s.name}</td>
                         <td>{s.department || ''}</td>
+                        <td>{s.scheme || 'N/A'}</td>
                         <td>{s.type || 'Theory'}</td>
                         <td>{s.credits}</td>
                         <td>{s.teachingHours}</td>
@@ -2013,30 +2073,93 @@ const AdminHomePage = () => {
                     <label>Email</label>
                     <input type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} placeholder="student@school.com" />
                   </div>
-                  <div className="form-group">
-                    <label>Department</label>
-                    <select value={studentDept} onChange={(e) => setStudentDept(e.target.value)}>
-                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Semester</label>
-                    <select value={studentSemester} onChange={(e) => setStudentSemester(e.target.value)}>
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s.toString()}>Semester {s}</option>)}
-                    </select>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Department</label>
+                      <select value={studentDept} onChange={(e) => setStudentDept(e.target.value)}>
+                        {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Semester</label>
+                      <select value={studentSemester} onChange={(e) => setStudentSemester(e.target.value)}>
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s.toString()}>Semester {s}</option>)}
+                      </select>
+                    </div>
                   </div>
                   <div className="form-group">
                     <label>Total Fees (Annual)</label>
                     <input type="number" value={studentTotalFees} onChange={(e) => setStudentTotalFees(e.target.value)} />
                   </div>
                 </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Division</label>
+                    <select value={studentDivision} onChange={(e) => setStudentDivision(e.target.value)}>
+                      {["A", "B", "C", "D", "E"].map(div => <option key={div} value={div}>Division {div}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Date of Birth</label>
+                    <input type="date" value={studentDOB} onChange={(e) => setStudentDOB(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Father's Name</label>
+                    <input value={studentFatherName} onChange={(e) => setStudentFatherName(e.target.value)} placeholder="Father's Name" />
+                  </div>
+                  <div className="form-group">
+                    <label>Mother's Name</label>
+                    <input value={studentMotherName} onChange={(e) => setStudentMotherName(e.target.value)} placeholder="Mother's Name" />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Phone Number</label>
+                    <input value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} placeholder="Contact Number" />
+                  </div>
+                  <div className="form-group">
+                    <label>Total Fees (Annual)</label>
+                    <input type="number" value={studentTotalFees} onChange={(e) => setStudentTotalFees(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Religion</label>
+                    <input value={studentReligion} onChange={(e) => setStudentReligion(e.target.value)} placeholder="e.g. Hindu, Muslim, Christian" />
+                  </div>
+                  <div className="form-group">
+                    <label>Caste</label>
+                    <input value={studentCaste} onChange={(e) => setStudentCaste(e.target.value)} placeholder="Caste" />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Guardian Name</label>
+                    <input value={studentGuardianName} onChange={(e) => setStudentGuardianName(e.target.value)} placeholder="Guardian Name" />
+                  </div>
+                  <div className="form-group">
+                    <label>Guardian Address</label>
+                    <input value={studentGuardianAddress} onChange={(e) => setStudentGuardianAddress(e.target.value)} placeholder="Guardian Address" />
+                  </div>
+                </div>
+
                 <div className="form-buttons">
                   <button type="submit">{editingStudentId ? "Update Student" : "Add Student"}</button>
                   {editingStudentId && (
                     <button type="button" onClick={() => {
                       setEditingStudentId(null); setStudentName(""); setStudentEmail(""); setStudentRollNo("");
+                      setStudentDivision("A"); setStudentDOB("");
+                      setStudentFatherName(""); setStudentMotherName("");
+                      setStudentReligion(""); setStudentCaste(""); setStudentPhone("");
+                      setStudentGuardianName(""); setStudentGuardianAddress("");
+                      setStudentTotalFees(0);
                     }}>Cancel Edit</button>
                   )}
                   {editingStudentId && (
