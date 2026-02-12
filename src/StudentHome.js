@@ -15,6 +15,7 @@ const StudentHomePage = () => {
         email: "",
         department: "",
         semester: "",
+        division: "",
         phone: "",
         address: ""
     });
@@ -63,10 +64,12 @@ const StudentHomePage = () => {
                     setFeesData(feesSnap.val());
                 }
 
-                // Fetch Timetable (Filter by department/semester)
+                // Fetch Timetable (Filter by department/semester/division)
                 if (userSnap.exists()) {
-                    const { department, semester } = userSnap.val();
-                    const timetableRef = ref(rtdb, `timetables/${department}/${semester}`);
+                    const { department, semester, division } = userSnap.val();
+                    // Default to 'A' if division is not set
+                    const div = division || 'A';
+                    const timetableRef = ref(rtdb, `timetables/${department}/${semester}/${div}`);
                     const ttSnap = await get(timetableRef);
                     if (ttSnap.exists()) {
                         setTimetable(ttSnap.val());
@@ -112,7 +115,7 @@ const StudentHomePage = () => {
     if (loading) return <div className="loading">Loading...</div>;
 
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-    const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
+    const hours = ["9:00-9:50", "9:50-10:40", "10:50-11:40", "11:40-12:30", "1:20-2:10", "2:20-3:10", "3:10-4:00"];
 
     return (
         <div className="home-layout">
@@ -202,6 +205,27 @@ const StudentHomePage = () => {
                                 <div className="form-group">
                                     <label>Semester</label>
                                     <input name="semester" value={studentData.semester} disabled />
+                                </div>
+                                <div className="form-group">
+                                    <label>Division</label>
+                                    <select
+                                        name="division"
+                                        value={studentData.division || "A"}
+                                        onChange={handleDataChange}
+                                        disabled={!isEditMode}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            borderRadius: '8px',
+                                            border: '1px solid var(--glass-border)',
+                                            background: 'rgba(255, 255, 255, 0.05)',
+                                            color: 'var(--text-primary)'
+                                        }}
+                                    >
+                                        {Array.from({ length: 5 }, (_, i) => String.fromCharCode(65 + i)).map(div => (
+                                            <option key={div} value={div}>Division {div}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className="form-group">
                                     <label>Phone</label>
