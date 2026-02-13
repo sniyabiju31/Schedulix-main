@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import "./home.css"; // Reuse staff styles for consistency or create student-specific later
-import { auth, rtdb, db } from "./firebase";
+import { auth, rtdb, db, storage } from "./firebase";
 import { ref, get, set, onValue, serverTimestamp } from "firebase/database";
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { User, Calendar, CreditCard, Clock, LogOut, Edit3 } from "lucide-react";
+import { User, Calendar, CreditCard, Clock, LogOut, Edit3, Camera } from "lucide-react";
 
 const StudentHomePage = () => {
     const [activeMenu, setActiveMenu] = useState("timetable");
@@ -15,8 +16,17 @@ const StudentHomePage = () => {
         email: "",
         department: "",
         semester: "",
+        division: "",
+        dob: "",
+        fatherName: "",
+        motherName: "",
+        religion: "",
+        caste: "",
         phone: "",
-        address: ""
+        guardianName: "",
+        guardianAddress: "",
+        address: "",
+        photoURL: ""
     });
     const [feesData, setFeesData] = useState({ total: 0, paid: 0, pending: 0 });
     const [timetable, setTimetable] = useState({});
@@ -63,10 +73,12 @@ const StudentHomePage = () => {
                     setFeesData(feesSnap.val());
                 }
 
-                // Fetch Timetable (Filter by department/semester)
+                // Fetch Timetable (Filter by department/semester/division)
                 if (userSnap.exists()) {
-                    const { department, semester } = userSnap.val();
-                    const timetableRef = ref(rtdb, `timetables/${department}/${semester}`);
+                    const { department, semester, division } = userSnap.val();
+                    // Default to 'A' if division is not set
+                    const div = division || 'A';
+                    const timetableRef = ref(rtdb, `timetables/${department}/${semester}/${div}`);
                     const ttSnap = await get(timetableRef);
                     if (ttSnap.exists()) {
                         setTimetable(ttSnap.val());
@@ -83,6 +95,29 @@ const StudentHomePage = () => {
 
     const handleDataChange = (e) => {
         setStudentData({ ...studentData, [e.target.name]: e.target.value });
+    };
+
+    const handlePhotoChange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                alert("File size too large. Please select an image under 2MB.");
+                return;
+            }
+            try {
+                setLoading(true);
+                const fileRef = storageRef(storage, `profile_photos/${auth.currentUser.uid}`);
+                await uploadBytes(fileRef, file);
+                const downloadURL = await getDownloadURL(fileRef);
+                setStudentData(prev => ({ ...prev, photoURL: downloadURL }));
+                alert("Photo uploaded successfully!");
+            } catch (error) {
+                console.error("Error uploading photo:", error);
+                alert("Failed to upload photo: " + error.message);
+            } finally {
+                setLoading(false);
+            }
+        }
     };
 
     const handleDataSubmit = async (e) => {
@@ -112,7 +147,7 @@ const StudentHomePage = () => {
     if (loading) return <div className="loading">Loading...</div>;
 
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-    const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
+    const hours = ["9:00-9:50", "9:50-10:40", "10:50-11:40", "11:40-12:30", "1:20-2:10", "2:20-3:10", "3:10-4:00"];
 
     return (
         <div className="home-layout">
@@ -137,6 +172,64 @@ const StudentHomePage = () => {
             <main className="content">
                 {activeMenu === "profile" && (
                     <div className="profile-section">
+                        <div className="profile-top-card" style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            marginBottom: '30px',
+                            background: 'rgba(255,255,255,0.02)',
+                            padding: '20px',
+                            borderRadius: '16px',
+                            border: '1px solid var(--glass-border)'
+                        }}>
+                            <div className="profile-avatar-container" style={{ position: 'relative' }}>
+                                <div className="profile-avatar" style={{
+                                    width: '120px',
+                                    height: '120px',
+                                    borderRadius: '50%',
+                                    border: '3px solid var(--accent-violet)',
+                                    overflow: 'hidden',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    background: '#1e293b'
+                                }}>
+                                    {studentData.photoURL ? (
+                                        <img src={studentData.photoURL} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                        <User size={60} color="#94a3b8" />
+                                    )}
+                                </div>
+                                {isEditMode && (
+                                    <label htmlFor="photo-upload" className="photo-upload-label" style={{
+                                        position: 'absolute',
+                                        bottom: '5px',
+                                        right: '5px',
+                                        background: 'var(--accent-violet)',
+                                        borderRadius: '50%',
+                                        width: '35px',
+                                        height: '35px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
+                                    }}>
+                                        <Camera size={18} color="white" />
+                                        <input
+                                            id="photo-upload"
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handlePhotoChange}
+                                            style={{ display: 'none' }}
+                                        />
+                                    </label>
+                                )}
+                            </div>
+                            <h2 style={{ marginTop: '15px', marginBottom: '5px' }}>{studentData.name || "Student Name"}</h2>
+                            <p style={{ color: '#94a3b8', margin: 0 }}>{studentData.rollNo || "Roll Number"}</p>
+                        </div>
+
                         <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <h1 style={{ margin: 0 }}>Personal Details</h1>
                             {timeWindow.open && (
@@ -188,14 +281,6 @@ const StudentHomePage = () => {
                                     <input name="role" value={studentData.role || "Student"} disabled />
                                 </div>
                                 <div className="form-group">
-                                    <label>Last Login</label>
-                                    <input
-                                        name="lastLogin"
-                                        value={studentData.lastLogin ? new Date(studentData.lastLogin).toLocaleString() : "First login today"}
-                                        disabled
-                                    />
-                                </div>
-                                <div className="form-group">
                                     <label>Department</label>
                                     <input name="department" value={studentData.department} disabled />
                                 </div>
@@ -204,12 +289,69 @@ const StudentHomePage = () => {
                                     <input name="semester" value={studentData.semester} disabled />
                                 </div>
                                 <div className="form-group">
+                                    <label>Division</label>
+                                    <select
+                                        name="division"
+                                        value={studentData.division || "A"}
+                                        onChange={handleDataChange}
+                                        disabled={!isEditMode}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            borderRadius: '8px',
+                                            border: '1px solid var(--glass-border)',
+                                            background: 'rgba(255, 255, 255, 0.05)',
+                                            color: 'var(--text-primary)'
+                                        }}
+                                    >
+                                        {Array.from({ length: 5 }, (_, i) => String.fromCharCode(65 + i)).map(div => (
+                                            <option key={div} value={div}>Division {div}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="form-group">
                                     <label>Phone</label>
                                     <input name="phone" value={studentData.phone || ""} onChange={handleDataChange} disabled={!isEditMode} />
                                 </div>
                                 <div className="form-group">
+                                    <label>Date of Birth</label>
+                                    <input
+                                        type="date"
+                                        name="dob"
+                                        value={studentData.dob || ""}
+                                        onChange={handleDataChange}
+                                        disabled={!isEditMode}
+                                        onClick={(e) => isEditMode && e.target.showPicker && e.target.showPicker()}
+                                        style={{ cursor: isEditMode ? 'pointer' : 'default' }}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Father's Name</label>
+                                    <input name="fatherName" value={studentData.fatherName || ""} onChange={handleDataChange} disabled={!isEditMode} placeholder="Father's Name" />
+                                </div>
+                                <div className="form-group">
+                                    <label>Mother's Name</label>
+                                    <input name="motherName" value={studentData.motherName || ""} onChange={handleDataChange} disabled={!isEditMode} placeholder="Mother's Name" />
+                                </div>
+                                <div className="form-group">
+                                    <label>Religion</label>
+                                    <input name="religion" value={studentData.religion || ""} onChange={handleDataChange} disabled={!isEditMode} placeholder="e.g. Hindu, Muslim, Christian" />
+                                </div>
+                                <div className="form-group">
+                                    <label>Caste</label>
+                                    <input name="caste" value={studentData.caste || ""} onChange={handleDataChange} disabled={!isEditMode} placeholder="Caste" />
+                                </div>
+                                <div className="form-group">
+                                    <label>Guardian Name</label>
+                                    <input name="guardianName" value={studentData.guardianName || ""} onChange={handleDataChange} disabled={!isEditMode} placeholder="Guardian Name" />
+                                </div>
+                                <div className="form-group">
+                                    <label>Guardian Address</label>
+                                    <input name="guardianAddress" value={studentData.guardianAddress || ""} onChange={handleDataChange} disabled={!isEditMode} placeholder="Guardian Address" />
+                                </div>
+                                <div className="form-group">
                                     <label>Address</label>
-                                    <textarea name="address" value={studentData.address || ""} onChange={handleDataChange} disabled={!isEditMode}></textarea>
+                                    <input name="address" value={studentData.address || ""} onChange={handleDataChange} disabled={!isEditMode} placeholder="Permanent Address" />
                                 </div>
                             </div>
                             {isEditMode && <button type="submit" className="save-btn">Save Changes</button>}

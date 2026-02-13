@@ -5,12 +5,52 @@ import { ref, get, set, push, update, remove, serverTimestamp } from "firebase/d
 import { User, Calendar, FileText, Star, Users } from "lucide-react";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"];
+const hours = ["9:00-9:50", "9:50-10:40", "10:50-11:40", "11:40-12:30", "1:20-2:10", "2:20-3:10", "3:10-4:00"];
 const departments = ["Computer Science", "Electronics & Communication", "Mechanical Engineering", "Civil Engineering", "Electrical & Electronics", "Information Technology", "Artificial Intelligence", "Cyber Security"];
+
+const getDeptShortName = (dept) => {
+  const map = {
+    "Computer Science": "CSE",
+    "Electronics & Communication": "ECE",
+    "Mechanical Engineering": "ME",
+    "Civil Engineering": "CE",
+    "Electrical & Electronics": "EEE",
+    "Information Technology": "IT",
+    "Artificial Intelligence": "AI",
+    "Cyber Security": "CYS"
+  };
+  return map[dept] || dept;
+};
+
+
 
 const StaffHomePage = () => {
   const [activeMenu, setActiveMenu] = useState("timetable");
   const [user, setUser] = useState(null);
+
+  // Division Settings State
+  const [divisionSettings, setDivisionSettings] = useState({});
+
+  useEffect(() => {
+    const fetchDivisionSettings = async () => {
+      try {
+        const settingsRef = ref(rtdb, 'settings/divisions');
+        const snapshot = await get(settingsRef);
+        if (snapshot.exists()) {
+          setDivisionSettings(snapshot.val());
+        }
+      } catch (error) {
+        console.error("Error fetching division settings:", error);
+      }
+    };
+    fetchDivisionSettings();
+  }, []);
+
+  const getClassOptions = (dept, sem) => {
+    const code = getDeptShortName(dept);
+    const count = (divisionSettings[dept] && divisionSettings[dept][sem]) || 1; // Default to 1 (Section A)
+    return Array.from({ length: count }, (_, i) => `${code} ${String.fromCharCode(65 + i)}`);
+  };
 
   // Preference Form State
   const [prefForm, setPrefForm] = useState({
@@ -25,6 +65,37 @@ const StaffHomePage = () => {
   });
 
   const [loadingPref, setLoadingPref] = useState(false);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+
+  // Fetch subjects for the staff's department
+  useEffect(() => {
+    if (activeMenu === 'preferences' && user) {
+      const fetchSubjects = async () => {
+        try {
+          const subjectsRef = ref(rtdb, 'subjects');
+          const snapshot = await get(subjectsRef);
+          if (snapshot.exists()) {
+            const data = snapshot.val();
+            // console.log("All subjects:", data); 
+            const subjects = Object.keys(data)
+              .map(key => ({ id: key, ...data[key] }))
+              .filter(s => {
+                // Loose matching for department to avoid case/spacing issues
+                const userDept = (user.department || "").trim().toLowerCase();
+                const subjectDept = (s.department || "").trim().toLowerCase();
+                return userDept === subjectDept || user.department === "All"; // Handle 'All' or exact match
+              });
+            setAvailableSubjects(subjects);
+          } else {
+          }
+        } catch (error) {
+          console.error("Error fetching subjects:", error);
+        }
+      };
+      fetchSubjects();
+    } else {
+    }
+  }, [activeMenu, user]);
 
   // Student Management State (For Tutors)
   const [myStudents, setMyStudents] = useState([]);
@@ -41,6 +112,7 @@ const StaffHomePage = () => {
   const handlePrefChange = (e) => {
     setPrefForm({ ...prefForm, [e.target.name]: e.target.value });
   };
+
 
   const handlePreferenceSubmit = async (e) => {
     e.preventDefault();
@@ -554,17 +626,32 @@ const StaffHomePage = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label>Preference 1</label>
-                    <input name="subjectPref1" value={prefForm.subjectPref1} onChange={handlePrefChange} required placeholder="e.g. Data Structures" />
+                    <select name="subjectPref1" value={prefForm.subjectPref1} onChange={handlePrefChange} required>
+                      <option value="">-- Select Subject --</option>
+                      {availableSubjects.map(s => (
+                        <option key={s.id} value={s.name}>{s.name} ({s.code}) - {s.semester}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="form-group">
                     <label>Preference 2</label>
-                    <input name="subjectPref2" value={prefForm.subjectPref2} onChange={handlePrefChange} placeholder="e.g. Algorithms" />
+                    <select name="subjectPref2" value={prefForm.subjectPref2} onChange={handlePrefChange}>
+                      <option value="">-- Select Subject --</option>
+                      {availableSubjects.map(s => (
+                        <option key={s.id} value={s.name}>{s.name} ({s.code}) - {s.semester}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Preference 3</label>
-                    <input name="subjectPref3" value={prefForm.subjectPref3} onChange={handlePrefChange} placeholder="e.g. Database" />
+                    <select name="subjectPref3" value={prefForm.subjectPref3} onChange={handlePrefChange}>
+                      <option value="">-- Select Subject --</option>
+                      {availableSubjects.map(s => (
+                        <option key={s.id} value={s.name}>{s.name} ({s.code}) - {s.semester}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -572,17 +659,26 @@ const StaffHomePage = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label>Class Pref 1</label>
-                    <input name="classPref1" value={prefForm.classPref1} onChange={handlePrefChange} required placeholder="e.g. Class 10A" />
+                    <select name="classPref1" value={prefForm.classPref1} onChange={handlePrefChange} required>
+                      <option value="">-- Select Class --</option>
+                      {getClassOptions(prefForm.department, prefForm.semester).map(cls => <option key={cls}>{cls}</option>)}
+                    </select>
                   </div>
                   <div className="form-group">
                     <label>Class Pref 2</label>
-                    <input name="classPref2" value={prefForm.classPref2} onChange={handlePrefChange} placeholder="e.g. Class 9B" />
+                    <select name="classPref2" value={prefForm.classPref2} onChange={handlePrefChange}>
+                      <option value="">-- Select Class --</option>
+                      {getClassOptions(prefForm.department, prefForm.semester).map(cls => <option key={cls}>{cls}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Class Pref 3</label>
-                    <input name="classPref3" value={prefForm.classPref3} onChange={handlePrefChange} placeholder="e.g. Class 8A" />
+                    <select name="classPref3" value={prefForm.classPref3} onChange={handlePrefChange}>
+                      <option value="">-- Select Class --</option>
+                      {getClassOptions(prefForm.department, prefForm.semester).map(cls => <option key={cls}>{cls}</option>)}
+                    </select>
                   </div>
                 </div>
 
