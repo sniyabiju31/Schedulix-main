@@ -4,7 +4,7 @@ import { auth, rtdb, db, storage } from "./firebase";
 import { ref, get, set, onValue, serverTimestamp } from "firebase/database";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { User, Calendar, CreditCard, Clock, LogOut, Edit3, Camera } from "lucide-react";
+import { User, Calendar, CreditCard, Clock, LogOut, Edit3, Camera, PieChart, BarChart3 } from "lucide-react";
 
 const StudentHomePage = () => {
     const [activeMenu, setActiveMenu] = useState("timetable");
@@ -30,6 +30,8 @@ const StudentHomePage = () => {
     });
     const [feesData, setFeesData] = useState({ total: 0, paid: 0, pending: 0 });
     const [timetable, setTimetable] = useState({});
+    const [attendanceData, setAttendanceData] = useState({});
+    const [selectedSemester, setSelectedSemester] = useState("Semester 1");
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -82,6 +84,17 @@ const StudentHomePage = () => {
                     const ttSnap = await get(timetableRef);
                     if (ttSnap.exists()) {
                         setTimetable(ttSnap.val());
+                    }
+                }
+
+                // Fetch Attendance Data
+                const attendanceRef = ref(rtdb, `attendance/${u.uid}`);
+                const attSnap = await get(attendanceRef);
+                if (attSnap.exists()) {
+                    setAttendanceData(attSnap.val());
+                    // Auto-select current semester if available
+                    if (userSnap.exists() && userSnap.val().semester) {
+                        setSelectedSemester(userSnap.val().semester);
                     }
                 }
                 setLoading(false);
@@ -162,6 +175,9 @@ const StudentHomePage = () => {
                     </li>
                     <li className={activeMenu === "fees" ? "active" : ""} onClick={() => setActiveMenu("fees")}>
                         <CreditCard size={20} className="menu-icon" /> Fees & Dues
+                    </li>
+                    <li className={activeMenu === "attendance" ? "active" : ""} onClick={() => setActiveMenu("attendance")}>
+                        <PieChart size={20} className="menu-icon" /> Attendance
                     </li>
                 </ul>
                 <button onClick={handleSignOut} className="sign-out-btn">
@@ -414,6 +430,110 @@ const StudentHomePage = () => {
                             <button className="pay-btn" onClick={() => alert("Redirecting to Payment Gateway...")}>
                                 Pay Now
                             </button>
+                        )}
+                    </div>
+                )}
+
+                {activeMenu === "attendance" && (
+                    <div className="attendance-section">
+                        <h1>Attendance Overview</h1>
+
+                        <div className="filter-bar" style={{ marginBottom: '20px' }}>
+                            <label>Select Semester:</label>
+                            <select
+                                value={selectedSemester}
+                                onChange={(e) => setSelectedSemester(e.target.value)}
+                                style={{
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--glass-border)',
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    color: 'var(--text-primary)',
+                                    marginLeft: '10px'
+                                }}
+                            >
+                                {["Semester 1", "Semester 2", "Semester 3", "Semester 4", "Semester 5", "Semester 6", "Semester 7", "Semester 8"].map(sem => (
+                                    <option key={sem} value={sem}>{sem}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {attendanceData && attendanceData[selectedSemester] ? (
+                            <>
+                                {/* Total Attendance Card */}
+                                <div className="stat-card" style={{ marginBottom: '30px', background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))' }}>
+                                    <h3>Total Attendance</h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginTop: '15px' }}>
+                                        <div className="circular-progress" style={{
+                                            width: '100px',
+                                            height: '100px',
+                                            position: 'relative',
+                                            borderRadius: '50%',
+                                            background: `conic-gradient(var(--accent-violet) ${(() => {
+                                                const subjects = attendanceData[selectedSemester];
+                                                const total = Object.values(subjects).reduce((acc, curr) => acc + (curr.total || 0), 0);
+                                                const attended = Object.values(subjects).reduce((acc, curr) => acc + (curr.attended || 0), 0);
+                                                return total > 0 ? (attended / total) * 100 : 0;
+                                            })()}%, rgba(255,255,255,0.1) 0)`
+                                        }}>
+                                            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#0f172a', width: '80%', height: '80%', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 'bold' }}>
+                                                {(() => {
+                                                    const subjects = attendanceData[selectedSemester];
+                                                    const total = Object.values(subjects).reduce((acc, curr) => acc + (curr.total || 0), 0);
+                                                    const attended = Object.values(subjects).reduce((acc, curr) => acc + (curr.attended || 0), 0);
+                                                    return total > 0 ? ((attended / total) * 100).toFixed(1) : "0.0";
+                                                })()}%
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: '500' }}>Overall Performance</p>
+                                            <p style={{ margin: '5px 0 0 0', color: '#94a3b8' }}>
+                                                {(() => {
+                                                    const subjects = attendanceData[selectedSemester];
+                                                    const total = Object.values(subjects).reduce((acc, curr) => acc + (curr.total || 0), 0);
+                                                    const attended = Object.values(subjects).reduce((acc, curr) => acc + (curr.attended || 0), 0);
+                                                    return `${attended} / ${total} Classes Attended`;
+                                                })()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Subject-wise Breakdown */}
+                                <h3>Subject-wise Breakdown</h3>
+                                <div className="subjects-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', marginTop: '15px' }}>
+                                    {Object.entries(attendanceData[selectedSemester]).map(([subject, data]) => {
+                                        const percentage = data.total > 0 ? (data.attended / data.total) * 100 : 0;
+                                        const color = percentage >= 75 ? '#22c55e' : percentage >= 60 ? '#eab308' : '#ef4444';
+
+                                        return (
+                                            <div key={subject} className="subject-card" style={{
+                                                background: 'rgba(255,255,255,0.05)',
+                                                padding: '20px',
+                                                borderRadius: '12px',
+                                                border: '1px solid var(--glass-border)'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                    <h4 style={{ margin: 0 }}>{subject}</h4>
+                                                    <span style={{ color: color, fontWeight: 'bold' }}>{percentage.toFixed(1)}%</span>
+                                                </div>
+                                                <div className="progress-bar" style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden', marginBottom: '10px' }}>
+                                                    <div style={{ width: `${percentage}%`, height: '100%', background: color, transition: 'width 0.5s ease' }}></div>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#94a3b8' }}>
+                                                    <span>Attended: <strong>{data.attended}</strong></span>
+                                                    <span>Total: <strong>{data.total}</strong></span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="no-data" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                                <BarChart3 size={40} style={{ marginBottom: '15px', opacity: 0.5 }} />
+                                <p>No attendance records found for {selectedSemester}.</p>
+                            </div>
                         )}
                     </div>
                 )}

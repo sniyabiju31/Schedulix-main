@@ -16,6 +16,7 @@ const classes = ["Class 10A", "Class 10B", "Class 9A", "Class 9B", "Class 8A"];
 const teachers = ["Mr. Smith", "Ms. Johnson", "Mr. Davis", "Ms. Wilson", "Mr. Brown"];
 const departments = ["Computer Science", "Electronics & Communication", "Mechanical Engineering", "Civil Engineering", "Electrical & Electronics", "Information Technology", "Artificial Intelligence", "Cyber Security"];
 const schemes = ["2015 Scheme", "2019 Scheme", "2024 Scheme"];
+const categories = ["Core", "Elective", "Non Credit", "Minor", "Honor"];
 
 const AdminHomePage = () => {
   const [user, setUser] = useState(null);
@@ -47,7 +48,10 @@ const AdminHomePage = () => {
   const [teachingHours, setTeachingHours] = useState("");
 
   const [subjectType, setSubjectType] = useState("Theory");
+  const [subjectCategory, setSubjectCategory] = useState("Core");
   const [subjectScheme, setSubjectScheme] = useState(schemes[schemes.length - 1]);
+  const [customScheme, setCustomScheme] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
   const [subjectsList, setSubjectsList] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [editingSubjectId, setEditingSubjectId] = useState(null);
@@ -922,8 +926,10 @@ const AdminHomePage = () => {
         department,
         credits: Number(credits) || 0,
         teachingHours: Number(teachingHours) || 0,
+        teachingHours: Number(teachingHours) || 0,
         type: subjectType,
-        scheme: subjectScheme,
+        category: subjectCategory === "Other" ? customCategory.trim() : subjectCategory,
+        scheme: subjectScheme === "Other" ? customScheme.trim() : subjectScheme,
         updatedAt: Date.now()
       };
 
@@ -947,7 +953,12 @@ const AdminHomePage = () => {
       setSubjectCode("");
       setCredits("");
       setTeachingHours("");
+      setTeachingHours("");
       setSubjectType("Theory");
+      setSubjectCategory("Core");
+      setSubjectScheme(schemes[schemes.length - 1]);
+      setCustomScheme("");
+      setCustomCategory("");
       setSubjectScheme(schemes[schemes.length - 1]);
 
       // Refresh list (re-fetch)
@@ -1107,7 +1118,22 @@ const AdminHomePage = () => {
     setCredits(subject.credits);
     setTeachingHours(subject.teachingHours);
     setSubjectType(subject.type || "Theory");
-    setSubjectScheme(subject.scheme || schemes[schemes.length - 1]);
+    const cat = subject.category || "Core";
+    if (categories.includes(cat)) {
+      setSubjectCategory(cat);
+      setCustomCategory("");
+    } else {
+      setSubjectCategory("Other");
+      setCustomCategory(cat);
+    }
+    const sch = subject.scheme || schemes[schemes.length - 1];
+    if (schemes.includes(sch)) {
+      setSubjectScheme(sch);
+      setCustomScheme("");
+    } else {
+      setSubjectScheme("Other");
+      setCustomScheme(sch);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1672,20 +1698,53 @@ const AdminHomePage = () => {
                   </div>
                 </div>
 
-                {/* Row 4: Scheme */}
-                <div className="form-row cols-1">
+                {/* Row 4: Scheme & Category */}
+                <div className="form-row cols-2">
                   <div className="form-group">
                     <label>Scheme</label>
-                    <select value={subjectScheme} onChange={(e) => setSubjectScheme(e.target.value)}>
-                      {schemes.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <select value={subjectScheme} onChange={(e) => setSubjectScheme(e.target.value)} style={{ flex: 1 }}>
+                        {schemes.map(s => <option key={s} value={s}>{s}</option>)}
+                        <option value="Other">Other</option>
+                      </select>
+                      {subjectScheme === "Other" && (
+                        <input
+                          type="text"
+                          value={customScheme}
+                          onChange={(e) => setCustomScheme(e.target.value)}
+                          placeholder="Enter Scheme"
+                          style={{ flex: 1 }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Category</label>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <select value={subjectCategory} onChange={(e) => setSubjectCategory(e.target.value)} style={{ flex: 1 }}>
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                        <option value="Other">Other</option>
+                      </select>
+                      {subjectCategory === "Other" && (
+                        <input
+                          type="text"
+                          value={customCategory}
+                          onChange={(e) => setCustomCategory(e.target.value)}
+                          placeholder="Enter Category"
+                          style={{ flex: 1 }}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="form-buttons">
                   <button type="submit">{editingSubjectId ? "Update Subject" : "Add Subject"}</button>
                   <button type="button" onClick={() => {
                     setSubjectName(''); setSubjectCode(''); setCredits(''); setTeachingHours(''); setSubjectType('Theory');
+                    setSubjectCategory('Core');
                     setSubjectScheme(schemes[schemes.length - 1]);
+                    setCustomScheme("");
+                    setCustomCategory("");
                     setEditingSubjectId(null);
                   }}>
                     {editingSubjectId ? "Cancel Edit" : "Clear"}
@@ -1699,7 +1758,7 @@ const AdminHomePage = () => {
               {loadingSubjects ? <p>Loading...</p> : subjectsList.length === 0 ? <p>No subjects for this semester.</p> : (
                 <table className="subjects-table">
                   <thead>
-                    <tr><th>Code</th><th>Name</th><th>Department</th><th>Scheme</th><th>Type</th><th>Credits</th><th>Hours</th><th>Actions</th></tr>
+                    <tr><th>Code</th><th>Name</th><th>Department</th><th>Category</th><th>Type</th><th>Credits</th><th>Hours</th><th>Actions</th></tr>
                   </thead>
                   <tbody>
                     {subjectsList.map(s => (
@@ -1707,7 +1766,7 @@ const AdminHomePage = () => {
                         <td>{s.code}</td>
                         <td>{s.name}</td>
                         <td>{s.department || ''}</td>
-                        <td>{s.scheme || 'N/A'}</td>
+                        <td>{s.category || 'Core'}</td>
                         <td>{s.type || 'Theory'}</td>
                         <td>{s.credits}</td>
                         <td>{s.teachingHours}</td>
