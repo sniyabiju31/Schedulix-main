@@ -21,6 +21,8 @@ export class TimetableGenerator {
         this.teacherAvailability = {};
 
         this.debugInfo = []; // Store failure reasons
+        this.steps = 0; // Operation counter
+        this.MAX_STEPS = 50000; // Safety limit
     }
 
     log(msg) {
@@ -56,7 +58,10 @@ export class TimetableGenerator {
             if (!this.timetables[dept][sem]) this.timetables[dept][sem] = {};
             if (!this.timetables[dept][sem][div]) this.timetables[dept][sem][div] = {};
 
-            // Sort subjects: Labs first (Hard constraint), then Theory
+            // Sort subjects: Labs first (Hard constraint), then Randomized Theory
+            // First, shuffle the list to ensure Theory subjects are in random order before sorting
+            classSubjects.sort(() => Math.random() - 0.5);
+
             classSubjects.sort((a, b) => {
                 const aIsLab = a.type === 'Lab' || a.credits > 3 || (a.teachingHours && a.teachingHours > 1);
                 const bIsLab = b.type === 'Lab' || b.credits > 3 || (b.teachingHours && b.teachingHours > 1);
@@ -77,14 +82,18 @@ export class TimetableGenerator {
 
     initialize() {
         this.timetables = {};
+
         this.teacherAvailability = {};
+        this.teacherWorkLoad = {};
 
         // 1. Initialize all teachers as Free
         this.teachers.forEach(t => {
             const tid = t.id || t.employeeId;
             this.teacherAvailability[tid] = {};
+            this.teacherWorkLoad[tid] = { total: 0, daily: {} }; // Track Hours
             DAYS.forEach(d => {
                 this.teacherAvailability[tid][d] = {};
+                this.teacherWorkLoad[tid].daily[d] = 0;
                 HOURS.forEach(h => {
                     this.teacherAvailability[tid][d][h] = true; // Free
                 });
@@ -112,7 +121,12 @@ export class TimetableGenerator {
                                             // Mark Busy
                                             if (this.teacherAvailability[slot.teacherId][day]) {
                                                 this.teacherAvailability[slot.teacherId][day][hour] = false;
-                                                // console.log(`Marking ${slot.teacherName} busy on ${day} ${hour}`);
+
+                                                // Update Load Tracking
+                                                if (this.teacherWorkLoad[slot.teacherId]) {
+                                                    this.teacherWorkLoad[slot.teacherId].total++;
+                                                    this.teacherWorkLoad[slot.teacherId].daily[day]++;
+                                                }
                                             }
                                         }
                                     });
@@ -147,6 +161,7 @@ export class TimetableGenerator {
     }
 
     scheduleClass(dept, sem, div, subjects) {
+        this.steps = 0; // Reset counter for this class
         const slotsToFill = [];
 
         subjects.forEach(sub => {
@@ -180,6 +195,13 @@ export class TimetableGenerator {
     }
 
     backtrack(dept, sem, div, slots, index) {
+        this.steps++;
+        if (this.steps > this.MAX_STEPS) {
+            console.warn(`Backtrack Hit Max Steps (${this.MAX_STEPS}) for ${dept} ${sem} ${div}`);
+            this.log("Hit Max Steps - Stopping recursion");
+            return false;
+        }
+
         if (index >= slots.length) return true; // All slots filled!
 
         // Limit labs per day
@@ -193,26 +215,21 @@ export class TimetableGenerator {
         let candidates = [];
         const deptTeachers = this.teachers.filter(t => t.department === dept);
 
-        // Calculate current load for each candidate
-        const getTeacherLoad = (tid) => {
-            let load = 0;
-            // Iterate all scheduled slots to count
-            Object.values(this.timetables).forEach(d => {
-                Object.values(d).forEach(s => {
-                    Object.values(s).forEach(divObj => {
-                        Object.values(divObj).forEach(dayObj => { // Day
-                            Object.values(dayObj).forEach(slot => {
-                                if (slot.teacherId === tid) load++;
-                            });
-                        });
-                    });
-                });
-            });
-            return load;
-        };
-
         deptTeachers.forEach(teacher => {
             let score = 0;
+            const tid = teacher.id;
+
+            // --- WORKLOAD CONSTRAINTS (Selection Phase) ---
+            const workLoad = this.teacherWorkLoad[tid];
+            if (!workLoad) return; // Should not happen
+
+            // Hard Limit: Max 24 hours/week
+            if (workLoad.total >= 24) {
+                // Skip teacher if already at max capacity
+                // We exclude them from 'candidates' entirely
+                return;
+            }
+
             const pref = this.preferences.find(p => p.email === teacher.email);
             const teacherPref = this.preferences.find(p => p.id === teacher.id);
             const pObj = teacherPref || pref;
@@ -234,21 +251,25 @@ export class TimetableGenerator {
             }
 
             // Consistency Bonus: If this teacher is ALREADY teaching this subject to this class, HUGE bonus.
-            // This ensures "Teacher A" keeps teaching "Maths" to "Class 1A" for all slots.
             const isAlreadyTeachingThis = Object.values(this.timetables[dept][sem][div] || {}).some(dayObj => {
                 return Object.values(dayObj).some(s => s.teacherId === teacher.id && s.subject === subject.name);
             });
 
             if (isAlreadyTeachingThis) {
-                score += 500; // Massive bonus to lock them in
-            } else {
-                // ... only apply other logic (prefs/load) if not locked yet
+                score += 500;
             }
 
-            // Load Balancing Penalty (only if not already locked)
+            // Load Balancing & Target Constraints (18-24 hours)
             if (!isAlreadyTeachingThis) {
-                const currentLoad = getTeacherLoad(teacher.id);
-                score -= (currentLoad * 10);
+                const currentLoad = workLoad.total;
+
+                // Prioritize teachers who are BELOW the minimum (18)
+                if (currentLoad < 18) {
+                    score += (18 - currentLoad) * 5; // Boost
+                } else {
+                    // Slight penalty as they get fuller, to distribute to others
+                    score -= (currentLoad - 18) * 5;
+                }
             }
 
             candidates.push({ teacher, score });
@@ -308,7 +329,13 @@ export class TimetableGenerator {
                 }
             }
 
-            for (let h = 0; h < HOURS.length; h++) {
+            // Define hour order: Shuffle for Theory to avoid deterministically picking 1st slot
+            let hourIndices = Array.from({ length: HOURS.length }, (_, i) => i);
+            if (currentSlotRequest.type === 'Theory') {
+                hourIndices.sort(() => Math.random() - 0.5);
+            }
+
+            for (let h of hourIndices) {
                 // --- CONSTRAINT CHECKING ---
 
                 // 1. Lab Constraints
@@ -328,8 +355,22 @@ export class TimetableGenerator {
 
                 // Try ALL Possible Teachers for this slot
                 for (const teacher of possibleTeachers) {
+                    // Allow 'null' teacher (Unassigned) to proceed, but skip workload checks for them
+
+                    if (teacher) {
+                        // --- CONSTRAINT CHECKING (Assignment Phase) ---
+                        const tid = teacher.id;
+                        const workLoad = this.teacherWorkLoad[tid];
+
+                        // 1. Weekly Constraint (Check again just in case)
+                        if (workLoad.total + duration > 24) continue;
+
+                        // 2. Daily Constraint (Distribute Equally)
+                        // Cap daily hours to 6 to force distribution across days (Allows 2 labs = 6h)
+                        if (workLoad.daily[day] + duration > 6) continue;
+                    }
+
                     let isFree = true;
-                    let rejectionReason = "";
 
                     // Check Time Constraints & Availability
                     for (let i = 0; i < duration; i++) {
@@ -374,6 +415,12 @@ export class TimetableGenerator {
                             }
                         }
 
+                        // Update WorkLoad
+                        if (teacher) {
+                            this.teacherWorkLoad[teacher.id].total += duration;
+                            this.teacherWorkLoad[teacher.id].daily[day] += duration;
+                        }
+
                         // RECURSE
                         if (this.backtrack(dept, sem, div, slots, index + 1)) {
                             return true;
@@ -386,6 +433,12 @@ export class TimetableGenerator {
                             if (teacher) {
                                 this.teacherAvailability[teacher.id][day][hourLabel] = true;
                             }
+                        }
+
+                        // Revert WorkLoad
+                        if (teacher) {
+                            this.teacherWorkLoad[teacher.id].total -= duration;
+                            this.teacherWorkLoad[teacher.id].daily[day] -= duration;
                         }
                     }
                 }
