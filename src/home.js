@@ -102,12 +102,39 @@ const StaffHomePage = () => {
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentForm, setStudentForm] = useState({
     name: "",
-    rollNo: "",
     department: "",
     admissionYear: "",
     email: ""
   });
   const [editingStudentId, setEditingStudentId] = useState(null);
+
+  const isWithinDutyPeriod = () => {
+    if (!user) return false;
+    // Admins always have access if they somehow use this page, 
+    // but the role check here is more for staff.
+    if (user.role === 'admin') return true;
+
+    if (user.isAdmissionDuty !== true && user.isAdmissionDuty !== "true") return false;
+
+    const now = new Date();
+    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const currentTime = now.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+
+    const { admissionDutyStartDate, admissionDutyEndDate, admissionDutyStartTime, admissionDutyEndTime } = user;
+
+    // If no dates/times are set, assume it's always active if isAdmissionDuty is true
+    if (!admissionDutyStartDate || !admissionDutyEndDate) return true;
+
+    const isDateInRange = today >= admissionDutyStartDate && today <= admissionDutyEndDate;
+    if (!isDateInRange) return false;
+
+    if (admissionDutyStartTime && admissionDutyEndTime) {
+      const isTimeInRange = currentTime >= admissionDutyStartTime && currentTime <= admissionDutyEndTime;
+      return isTimeInRange;
+    }
+
+    return true;
+  };
 
   const handlePrefChange = (e) => {
     setPrefForm({ ...prefForm, [e.target.name]: e.target.value });
@@ -156,7 +183,6 @@ const StaffHomePage = () => {
     setEditingStudentId(student.id);
     setStudentForm({
       name: student.name || "",
-      rollNo: student.rollNo || "",
       department: student.department || "",
       admissionYear: student.admissionYear || "",
       email: student.email || ""
@@ -175,22 +201,18 @@ const StaffHomePage = () => {
       alert("Please fill in Name, Department, and Year of Admission.");
       return;
     }
-
-    // Enforce Department Restriction
     if (user.department && studentForm.department !== user.department) {
       alert(`You can only manage students in your own department: ${user.department}`);
       return;
     }
 
+    if (!isWithinDutyPeriod()) {
+      alert("Access Denied: You are outside of your assigned Admission Duty period or working hours.");
+      return;
+    }
+
     try {
       const studentsRef = ref(rtdb, 'students');
-
-      // Check for duplicate Roll No if provided
-      if (studentForm.rollNo) {
-        // Simple client-side check against loaded list or server query could be done here.
-        // For simplicity in this scope, we'll verify against the currently fetched list if available,
-        // or just push. Ideally, use a query.
-      }
 
       if (editingStudentId) {
         // Update existing student
@@ -215,7 +237,6 @@ const StaffHomePage = () => {
 
       setStudentForm({
         name: "",
-        rollNo: "",
         department: user.department || "", // Keep dept selected
         admissionYear: "",
         email: ""
@@ -248,10 +269,17 @@ const StaffHomePage = () => {
           id: key,
           ...data[key]
         })).filter(s => {
-          // Filter by Tutor's Department if available
+          // If on Admission Duty, they might see all students or just their dept?
+          // Keeping existing filter but ensuring we have a clean list.
           return s.department === user.department || s.tutorUid === user.uid;
         });
-        setMyStudents(filtered.sort((a, b) => (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "")));
+
+        // Final Sort: Department First, then Name Alphabetically
+        const sorted = filtered.sort((a, b) =>
+          (a.department || "").localeCompare(b.department || "") ||
+          (a.name || "").localeCompare(b.name || "")
+        );
+        setMyStudents(sorted);
       } else {
         setMyStudents([]);
       }
@@ -316,6 +344,10 @@ const StaffHomePage = () => {
                       isTutor: teacherRecord.isTutor || false,
                       tutorClass: teacherRecord.tutorClass || "",
                       isAdmissionDuty: teacherRecord.isAdmissionDuty || false,
+                      admissionDutyStartDate: teacherRecord.admissionDutyStartDate || "",
+                      admissionDutyEndDate: teacherRecord.admissionDutyEndDate || "",
+                      admissionDutyStartTime: teacherRecord.admissionDutyStartTime || "",
+                      admissionDutyEndTime: teacherRecord.admissionDutyEndTime || "",
                       // also sync other fields if missing
                       department: finalUser.department || teacherRecord.department,
                       employeeId: finalUser.employeeId || teacherRecord.employeeId,
@@ -477,7 +509,7 @@ const StaffHomePage = () => {
           >
             <Star size={20} className="menu-icon" /> Subject Preferences
           </li>
-          {user && (user.isAdmissionDuty === true || user.isAdmissionDuty === "true") && (
+          {user && (user.isAdmissionDuty === true || user.isAdmissionDuty === "true") && isWithinDutyPeriod() && (
             <li
               className={activeMenu === "my-students" ? "active" : ""}
               onClick={() => setActiveMenu("my-students")}
@@ -526,8 +558,22 @@ const StaffHomePage = () => {
                 </div>
                 <div className="info-item">
                   <label>Admission Duty:</label>
-                  <span>{user ? ((user.isAdmissionDuty === true || user.isAdmissionDuty === "true") ? "Yes" : "No") : "N/A"}</span>
+                  <span>
+                    {user ? ((user.isAdmissionDuty === true || user.isAdmissionDuty === "true")
+                      ? (isWithinDutyPeriod() ? "Active (On Duty)" : "Inactive (Off Duty)")
+                      : "No") : "N/A"}
+                  </span>
                 </div>
+                {user && (user.isAdmissionDuty === true || user.isAdmissionDuty === "true") && (
+                  <div className="info-item">
+                    <label>Duty Period:</label>
+                    <span style={{ fontSize: '0.9rem' }}>
+                      {user.admissionDutyStartDate} to {user.admissionDutyEndDate}
+                      <br />
+                      ({user.admissionDutyStartTime} - {user.admissionDutyEndTime})
+                    </span>
+                  </div>
+                )}
                 {user && (user.isTutor === true || user.isTutor === "true") && (
                   <div className="info-item">
                     <label>Assigned Class:</label>
@@ -738,15 +784,6 @@ const StaffHomePage = () => {
                       placeholder="Student Full Name"
                     />
                   </div>
-                  <div className="form-group">
-                    <label>Roll Number (Optional)</label>
-                    <input
-                      name="rollNo"
-                      value={studentForm.rollNo}
-                      onChange={handleStudentChange}
-                      placeholder="Enter Roll No"
-                    />
-                  </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
@@ -786,49 +823,75 @@ const StaffHomePage = () => {
             </div>
 
             <div className="table-container" style={{ marginTop: '2rem' }}>
-              <h3>Class List ({myStudents.length})</h3>
-              {loadingStudents ? <p>Loading...</p> : myStudents.length === 0 ? <p>No students found for your department.</p> : (
-                <table className="timetable" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left', padding: '10px' }}>Name</th>
-                      <th style={{ textAlign: 'left', padding: '10px' }}>Roll No</th>
-                      <th style={{ textAlign: 'left', padding: '10px' }}>Department</th>
-                      <th style={{ textAlign: 'left', padding: '10px' }}>Year of Admission</th>
-                      <th style={{ textAlign: 'left', padding: '10px' }}>Added By</th>
-                      <th style={{ textAlign: 'left', padding: '10px' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {myStudents.map(student => (
-                      <tr key={student.id} style={{ borderBottom: '1px solid #eee' }}>
-                        <td style={{ padding: '10px' }}>{student.name}</td>
-                        <td style={{ padding: '10px' }}>{student.rollNo || '-'}</td>
-                        <td style={{ padding: '10px' }}>{student.department}</td>
-                        <td style={{ padding: '10px' }}>{student.admissionYear || '-'}</td>
-                        <td style={{ padding: '10px' }}>{student.tutorName || (student.addedBy === 'tutor' ? 'Tutor' : 'Admin')}</td>
-                        <td style={{ padding: '10px' }}>
-                          {student.tutorUid === user.uid && (
-                            <button
-                              onClick={() => handleEditStudent(student)}
-                              style={{
-                                padding: '5px 10px',
-                                backgroundColor: '#007bff',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '0.8rem'
-                              }}
-                            >
-                              Edit
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <h3>Admissions List Summary ({myStudents.length} Students)</h3>
+              {loadingStudents ? (
+                <p>Loading...</p>
+              ) : myStudents.length === 0 ? (
+                <p>No students found for your department.</p>
+              ) : (
+                <>
+                  {[...new Set(myStudents.map(s => s.department))].sort().map(dept => {
+                    const studentsInDept = myStudents.filter(s => s.department === dept)
+                      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+                    return (
+                      <div key={dept} style={{ marginBottom: '2.5rem', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '16px', padding: '24px', background: 'rgba(30, 41, 59, 0.4)', backdropFilter: 'blur(10px)' }}>
+                        <h3 style={{ borderBottom: '2px solid #6366f1', paddingBottom: '12px', color: '#818cf8', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{dept || "Unassigned Department"}</span>
+                          <span style={{ fontSize: '0.9rem', background: 'rgba(99, 102, 241, 0.2)', padding: '4px 12px', borderRadius: '20px' }}>{studentsInDept.length} Students</span>
+                        </h3>
+                        <table className="timetable" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ background: 'rgba(255, 255, 255, 0.05)' }}>
+                              <th style={{ textAlign: 'left', padding: '16px', color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>S.No</th>
+                              <th style={{ textAlign: 'left', padding: '16px', color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Student Name</th>
+                              <th style={{ textAlign: 'left', padding: '16px', color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Roll No</th>
+                              <th style={{ textAlign: 'left', padding: '16px', color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Year</th>
+                              <th style={{ textAlign: 'left', padding: '16px', color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Added By</th>
+                              <th style={{ textAlign: 'left', padding: '16px', color: '#94a3b8', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {studentsInDept.map((student, index) => (
+                              <tr key={student.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', transition: 'background 0.2s' }} className="student-row-hover">
+                                <td style={{ padding: '16px', fontWeight: '600', color: '#6366f1' }}>{index + 1}</td>
+                                <td style={{ padding: '16px', color: '#f8fafc' }}>{student.name}</td>
+                                <td style={{ padding: '16px' }}>
+                                  <span style={{ background: 'rgba(0, 243, 255, 0.1)', padding: '4px 10px', borderRadius: '6px', fontSize: '0.9rem', color: '#22d3ee', border: '1px solid rgba(0, 243, 255, 0.2)' }}>
+                                    {student.rollNo || 'Pending'}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '16px', color: '#cbd5e1' }}>{student.admissionYear || '-'}</td>
+                                <td style={{ padding: '16px', color: '#94a3b8', fontSize: '0.9rem' }}>
+                                  {student.tutorName || (student.addedBy === 'tutor' ? 'Tutor' : 'Admin')}
+                                </td>
+                                <td style={{ padding: '16px' }}>
+                                  {student.tutorUid === user.uid && (
+                                    <button
+                                      onClick={() => handleEditStudent(student)}
+                                      style={{
+                                        padding: '6px 14px',
+                                        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                                        color: '#a5b4fc',
+                                        border: '1px solid rgba(99, 102, 241, 0.4)',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.85rem',
+                                        transition: 'all 0.2s'
+                                      }}
+                                    >
+                                      Edit
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
+                </>
               )}
             </div>
           </div>
