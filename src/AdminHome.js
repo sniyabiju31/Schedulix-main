@@ -64,13 +64,16 @@ const AdminHomePage = () => {
   const [isTutor, setIsTutor] = useState(false);
   const [tutorClass, setTutorClass] = useState("");
   const [isAdmissionDuty, setIsAdmissionDuty] = useState(false);
+  const [admissionDutyStartDate, setAdmissionDutyStartDate] = useState("");
+  const [admissionDutyEndDate, setAdmissionDutyEndDate] = useState("");
+  const [admissionDutyStartTime, setAdmissionDutyStartTime] = useState("");
+  const [admissionDutyEndTime, setAdmissionDutyEndTime] = useState("");
   const [teachersList, setTeachersList] = useState([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [editingTeacherId, setEditingTeacherId] = useState(null);
   // Student Form State
   const [studentName, setStudentName] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
-  const [studentRollNo, setStudentRollNo] = useState("");
   const [studentDept, setStudentDept] = useState("CSE");
   const [studentSemester, setStudentSemester] = useState("1");
   const [studentDivision, setStudentDivision] = useState("A");
@@ -507,7 +510,6 @@ const AdminHomePage = () => {
     setEditingStudentId(student.id);
     setStudentName(student.name);
     setStudentEmail(student.email);
-    setStudentRollNo(student.rollNo || '');
     setStudentDept(student.department);
     setStudentSemester(student.semester);
     setStudentDivision(student.division || "A");
@@ -525,15 +527,15 @@ const AdminHomePage = () => {
 
   const handleAddStudentSubmit = async (e) => {
     e.preventDefault();
-    if (!studentName || !studentEmail || !studentRollNo) {
-      alert("Please fill in name, email and roll number.");
+    if (!studentName || !studentEmail) {
+      alert("Please fill in name and email.");
       return;
     }
     try {
       const studentData = {
         name: studentName,
         email: studentEmail,
-        rollNo: studentRollNo,
+        rollNo: "", // Explicitly clear/ignore manual roll number
         department: studentDept,
         semester: studentSemester,
         division: studentDivision,
@@ -567,14 +569,14 @@ const AdminHomePage = () => {
 
           await setDoc(doc(db, "student", newUser.uid), {
             ...studentData,
-            username: studentRollNo,
+            username: studentEmail, // RollNo removed, using email as username
             role: "student",
             createdAt: serverTimestamp()
           });
 
           await set(rtdbRef(rtdb, `users/${newUser.uid}`), {
             name: studentName,
-            username: studentRollNo,
+            username: studentEmail,
             email: studentEmail,
             role: "student",
             department: studentDept,
@@ -589,7 +591,7 @@ const AdminHomePage = () => {
             pending: Number(studentTotalFees)
           });
 
-          alert(`Student added successfully!\nDefault Username: ${studentRollNo}\nDefault Password: 12345678\n\nA password reset email has been sent to ${studentEmail}.`);
+          alert(`Student added successfully!\nDefault Username: ${studentEmail}\nDefault Password: 12345678\n\nA password reset email has been sent to ${studentEmail}.`);
         } catch (authErr) {
           if (authErr.code === 'auth/email-already-in-use') {
             await sendPasswordResetEmail(secondaryAuth, studentEmail);
@@ -615,6 +617,7 @@ const AdminHomePage = () => {
       setStudentGuardianName(""); setStudentGuardianAddress("");
       setStudentTotalFees(0);
       setEditingStudentId(null);
+      setStudentName(""); setStudentEmail(""); setEditingStudentId(null);
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -732,6 +735,10 @@ const AdminHomePage = () => {
         employeeId: teacherEmpId,
         department: teacherDept,
         isAdmissionDuty,
+        admissionDutyStartDate: isAdmissionDuty ? admissionDutyStartDate : "",
+        admissionDutyEndDate: isAdmissionDuty ? admissionDutyEndDate : "",
+        admissionDutyStartTime: isAdmissionDuty ? admissionDutyStartTime : "",
+        admissionDutyEndTime: isAdmissionDuty ? admissionDutyEndTime : "",
         isTutor,
         tutorClass: isTutor ? tutorClass : "",
         updatedAt: Date.now()
@@ -768,6 +775,10 @@ const AdminHomePage = () => {
             console.log("Found user/staff profile to update:", targetUid);
             const updatePayload = {
               isAdmissionDuty,
+              admissionDutyStartDate: isAdmissionDuty ? admissionDutyStartDate : "",
+              admissionDutyEndDate: isAdmissionDuty ? admissionDutyEndDate : "",
+              admissionDutyStartTime: isAdmissionDuty ? admissionDutyStartTime : "",
+              admissionDutyEndTime: isAdmissionDuty ? admissionDutyEndTime : "",
               isTutor,
               tutorClass: isTutor ? tutorClass : "",
               department: teacherDept,
@@ -816,6 +827,10 @@ const AdminHomePage = () => {
             employeeId: teacherEmpId,
             department: teacherDept,
             isAdmissionDuty,
+            admissionDutyStartDate: isAdmissionDuty ? admissionDutyStartDate : "",
+            admissionDutyEndDate: isAdmissionDuty ? admissionDutyEndDate : "",
+            admissionDutyStartTime: isAdmissionDuty ? admissionDutyStartTime : "",
+            admissionDutyEndTime: isAdmissionDuty ? admissionDutyEndTime : "",
             isTutor,
             tutorClass: isTutor ? tutorClass : "",
             createdAt: serverTimestamp()
@@ -863,6 +878,10 @@ const AdminHomePage = () => {
       setIsTutor(false);
       setTutorClass("");
       setIsAdmissionDuty(false);
+      setAdmissionDutyStartDate("");
+      setAdmissionDutyEndDate("");
+      setAdmissionDutyStartTime("");
+      setAdmissionDutyEndTime("");
       setEditingTeacherId(null);
 
       // Refresh list
@@ -892,6 +911,10 @@ const AdminHomePage = () => {
     setIsTutor(teacher.isTutor || false);
     setTutorClass(teacher.tutorClass || "");
     setIsAdmissionDuty(teacher.isAdmissionDuty || false);
+    setAdmissionDutyStartDate(teacher.admissionDutyStartDate || "");
+    setAdmissionDutyEndDate(teacher.admissionDutyEndDate || "");
+    setAdmissionDutyStartTime(teacher.admissionDutyStartTime || "");
+    setAdmissionDutyEndTime(teacher.admissionDutyEndTime || "");
     setEditingTeacherId(teacher.id);
     window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to form
   };
@@ -1261,7 +1284,6 @@ const AdminHomePage = () => {
       setEditingStudentId(null);
       setStudentName("");
       setStudentEmail("");
-      setStudentRollNo("");
       setStudentDept("CSE");
       setStudentSemester("1");
       setStudentDivision("A");
@@ -1820,6 +1842,27 @@ const AdminHomePage = () => {
                   )}
                 </div>
 
+                {isAdmissionDuty && (
+                  <div className="form-row" style={{ border: '1px solid #ddd', padding: '15px', borderRadius: '8px', marginBottom: '15px', background: '#f9f9f9' }}>
+                    <div className="form-group">
+                      <label>Admission Duty Duration</label>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <input type="date" value={admissionDutyStartDate} onChange={(e) => setAdmissionDutyStartDate(e.target.value)} />
+                        <span>to</span>
+                        <input type="date" value={admissionDutyEndDate} onChange={(e) => setAdmissionDutyEndDate(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Daily Work Period</label>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <input type="time" value={admissionDutyStartTime} onChange={(e) => setAdmissionDutyStartTime(e.target.value)} />
+                        <span>to</span>
+                        <input type="time" value={admissionDutyEndTime} onChange={(e) => setAdmissionDutyEndTime(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="form-row">
                   <div className="form-group">
                     <label>Name</label>
@@ -1854,6 +1897,10 @@ const AdminHomePage = () => {
                       setIsTutor(false);
                       setTutorClass("");
                       setIsAdmissionDuty(false);
+                      setAdmissionDutyStartDate("");
+                      setAdmissionDutyEndDate("");
+                      setAdmissionDutyStartTime("");
+                      setAdmissionDutyEndTime("");
                     }}>Cancel Edit</button>
                   )}
                   {editingTeacherId && (
@@ -1975,6 +2022,46 @@ const AdminHomePage = () => {
 
               } catch (e) {
                 alert("Error seeding student: " + e.message);
+        <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '20px' }}>
+          <h3>Debug Tools</h3>
+          <button onClick={async () => {
+            try {
+              const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
+              await set(timetablesRef, {
+                subject: "Introduction to CS",
+                teacherEmpId: "T-123", // Matches our test case
+                teacherName: "Test Teacher",
+                room: "101",
+                department: "Computer Science",
+                semester: "Semester 1"
+              });
+              alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
+            } catch (e) {
+              alert("Error seeding: " + e.message);
+            }
+          }} style={{ background: 'orange', color: 'white', padding: '10px', marginRight: '10px' }}>
+            Seed Timetable Data
+          </button>
+
+          <button onClick={async () => {
+            try {
+              const studentData = {
+                name: "Test Student",
+                email: "student@test.com",
+                department: "Computer Science",
+                semester: "1",
+                totalFees: 50000,
+                createdAt: Date.now()
+              };
+
+              // 1. Add to RTDB 'students' master list
+              const snapshot = await rtdbGet(rtdbRef(rtdb, 'students'));
+              const students = snapshot.val() || {};
+              const exists = Object.values(students).some(s => s.email === "student@test.com");
+              if (exists) {
+                alert("Test Student already exists in master list.");
+              } else {
+                await set(push(rtdbRef(rtdb, 'students')), studentData);
               }
             }} style={{ background: '#28a745', color: 'white', padding: '10px' }}>
               Seed Test Student (S-101)
@@ -2110,6 +2197,10 @@ const AdminHomePage = () => {
             </div>
           </div>
         )}
+              // 2. Note: For full login, the student must still go through "First Time Login" 
+              // or Admin must create the Firebase Auth account.
+              // To make it instant, we can try to create the Auth account if you are logged in as admin.
+              alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Set your own password!");
 
         {activeMenu === "students" && (
           <div className="add-subject-section">
@@ -2122,12 +2213,6 @@ const AdminHomePage = () => {
                     <label>Name</label>
                     <input value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="Full Name" />
                   </div>
-                  <div className="form-group">
-                    <label>Roll Number / ID</label>
-                    <input value={studentRollNo} onChange={(e) => setStudentRollNo(e.target.value)} placeholder="ROLL-123" />
-                  </div>
-                </div>
-                <div className="form-row">
                   <div className="form-group">
                     <label>Email</label>
                     <input type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} placeholder="student@school.com" />
@@ -2219,6 +2304,7 @@ const AdminHomePage = () => {
                       setStudentReligion(""); setStudentCaste(""); setStudentPhone("");
                       setStudentGuardianName(""); setStudentGuardianAddress("");
                       setStudentTotalFees(0);
+                      setEditingStudentId(null); setStudentName(""); setStudentEmail("");
                     }}>Cancel Edit</button>
                   )}
                   {editingStudentId && (
@@ -2241,7 +2327,7 @@ const AdminHomePage = () => {
               </div>
               <table className="subjects-table">
                 <thead>
-                  <tr><th>Roll No</th><th>Name</th><th>Email</th><th>Dept</th><th>Sem</th><th>Actions</th></tr>
+                  <tr><th>S.No</th><th>Name</th><th>Email</th><th>Dept</th><th>Sem</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                   {[...studentsList].sort((a, b) => {
@@ -2250,9 +2336,9 @@ const AdminHomePage = () => {
                     }
                     // Default sort: Department then Name
                     return (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "");
-                  }).map(s => (
+                  }).map((s, index) => (
                     <tr key={s.id}>
-                      <td>{s.rollNo}</td>
+                      <td>{index + 1}</td>
                       <td>{s.name}</td>
                       <td>{s.email}</td>
                       <td>{s.department}</td>

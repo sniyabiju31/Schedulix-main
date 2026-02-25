@@ -5,6 +5,7 @@ import { auth, db, rtdb } from "./firebase";
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { ref, set as rtdbSet, get as rtdbGet, serverTimestamp as rtdbServerTimestamp, push, query as rtdbQuery, orderByChild, equalTo } from "firebase/database";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, fetchSignInMethodsForEmail, onAuthStateChanged, sendPasswordResetEmail } from "firebase/auth";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function Auth() {
   const [mode, setMode] = useState("login"); // login, signup, activate
@@ -17,6 +18,7 @@ export default function Auth() {
     employeeId: "", // For first time login
     department: "Computer Science", // Default
   });
+  const [showPassword, setShowPassword] = useState(false);
 
   function onChange(e) {
     const { name, value } = e.target;
@@ -512,14 +514,23 @@ export default function Auth() {
 
               <div className="field">
                 <label>Password</label>
-                <input
-                  name="password"
-                  type="password"
-                  value={form.password}
-                  onChange={onChange}
-                  required
-                  placeholder="Minimum 6 characters"
-                />
+                <div className="password-input-container">
+                  <input
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={onChange}
+                    required
+                    placeholder="Minimum 6 characters"
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
             </>
           )}
@@ -536,7 +547,23 @@ export default function Auth() {
               </div>
               <div className="field">
                 <label>New Password</label>
-                <input name="password" type="password" value={form.password} onChange={onChange} required minLength="6" />
+                <div className="password-input-container">
+                  <input
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={onChange}
+                    required
+                    minLength="6"
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
             </>
           )}
@@ -558,14 +585,23 @@ export default function Auth() {
 
               <div className="field">
                 <label>Password</label>
-                <input
-                  key="login-password"
-                  name="password"
-                  type="password"
-                  value={form.password}
-                  onChange={onChange}
-                  required
-                />
+                <div className="password-input-container">
+                  <input
+                    key="login-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={onChange}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 <span
                   onClick={handleForgotPassword}
                   style={{ fontSize: '0.85em', color: '#007bff', cursor: 'pointer', marginTop: '5px', display: 'block' }}
