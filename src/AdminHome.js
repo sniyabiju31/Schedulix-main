@@ -619,7 +619,6 @@ const AdminHomePage = () => {
       setStudentGuardianName(""); setStudentGuardianAddress("");
       setStudentTotalFees(0);
       setEditingStudentId(null);
-      setStudentName(""); setStudentEmail(""); setEditingStudentId(null);
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -2193,28 +2192,6 @@ const AdminHomePage = () => {
               <button
                 onClick={async () => {
                   try {
-                    const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
-                    await set(timetablesRef, {
-                      subject: "Introduction to CS",
-                      teacherEmpId: "T-123",
-                      teacherName: "Test Teacher",
-                      room: "101",
-                      department: "Computer Science",
-                      semester: "Semester 1"
-                    });
-                    alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
-                  } catch (e) {
-                    alert("Error seeding: " + e.message);
-                  }
-                }}
-                style={{ background: 'orange', color: 'white', padding: '10px' }}
-              >
-                Seed Timetable Data
-              </button>
-
-              <button
-                onClick={async () => {
-                  try {
                     const studentData = {
                       name: "Test Student",
                       email: "student@test.com",
@@ -2233,15 +2210,37 @@ const AdminHomePage = () => {
                       alert("Test Student already exists in master list.");
                     } else {
                       await set(push(rtdbRef(rtdb, 'students')), studentData);
-                      alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Roll Number: S-101\n6. Set your own password!");
+                      alert("Seed Successful!\\n\\n1. Go to Login\\n2. Select 'Student' role\\n3. Click 'First Time Login'\\n4. Email: student@test.com\\n5. Roll Number: S-101\\n6. Set your own password!");
                     }
                   } catch (e) {
                     alert("Error seeding student: " + e.message);
                   }
                 }}
-                style={{ background: '#28a745', color: 'white', padding: '10px' }}
+                style={{ background: '#28a745', color: 'white', padding: '10px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
               >
                 Seed Test Student (S-101)
+              </button>
+
+              <button
+                onClick={async () => {
+                  try {
+                    const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
+                    await set(timetablesRef, {
+                      subject: "Introduction to CS",
+                      teacherEmpId: "T-123",
+                      teacherName: "Test Teacher",
+                      room: "101",
+                      department: "Computer Science",
+                      semester: "Semester 1"
+                    });
+                    alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
+                  } catch (e) {
+                    alert("Error seeding: " + e.message);
+                  }
+                }}
+                style={{ background: 'orange', color: 'white', padding: '10px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
+              >
+                Seed Timetable Data
               </button>
             </div>
           </div>
@@ -2440,10 +2439,6 @@ const AdminHomePage = () => {
                     <label>Phone Number</label>
                     <input value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} placeholder="Contact Number" />
                   </div>
-                  <div className="form-group">
-                    <label>Total Fees (Annual)</label>
-                    <input type="number" value={studentTotalFees} onChange={(e) => setStudentTotalFees(e.target.value)} />
-                  </div>
                 </div>
 
                 <div className="form-row">
@@ -2478,7 +2473,6 @@ const AdminHomePage = () => {
                       setStudentReligion(""); setStudentCaste(""); setStudentPhone("");
                       setStudentGuardianName(""); setStudentGuardianAddress("");
                       setStudentTotalFees(0);
-                      setEditingStudentId(null); setStudentName(""); setStudentEmail("");
                     }}>Cancel Edit</button>
                   )}
                   {editingStudentId && (
