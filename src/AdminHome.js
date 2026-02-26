@@ -610,14 +610,13 @@ const AdminHomePage = () => {
         setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a, b) => (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "")));
       }
 
-      setStudentName(""); setStudentEmail(""); setStudentRollNo("");
+      setStudentName(""); setStudentEmail("");
       setStudentDivision("A"); setStudentDOB("");
       setStudentFatherName(""); setStudentMotherName("");
       setStudentReligion(""); setStudentCaste(""); setStudentPhone("");
       setStudentGuardianName(""); setStudentGuardianAddress("");
       setStudentTotalFees(0);
       setEditingStudentId(null);
-      setStudentName(""); setStudentEmail(""); setEditingStudentId(null);
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -1993,79 +1992,60 @@ const AdminHomePage = () => {
         {activeMenu === 'overview' && (
           <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '20px' }}>
             <h3>Debug Tools</h3>
-            <button onClick={async () => {
-              try {
-                const studentData = {
-                  name: "Test Student",
-                  email: "student@test.com",
-                  rollNo: "S-101",
-                  department: "Computer Science",
-                  semester: "1",
-                  totalFees: 50000,
-                  createdAt: Date.now()
-                };
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={async () => {
+                  try {
+                    const studentData = {
+                      name: "Test Student",
+                      email: "student@test.com",
+                      rollNo: "S-101",
+                      department: "Computer Science",
+                      semester: "1",
+                      totalFees: 50000,
+                      createdAt: Date.now()
+                    };
 
-                // 1. Add to RTDB 'students' master list
-                const snapshot = await rtdbGet(rtdbRef(rtdb, 'students'));
-                const students = snapshot.val() || {};
-                const exists = Object.values(students).some(s => s.rollNo === "S-101");
-                if (exists) {
-                  alert("Test Student S-101 already exists in master list.");
-                } else {
-                  await set(push(rtdbRef(rtdb, 'students')), studentData);
-                }
+                    const snapshot = await rtdbGet(rtdbRef(rtdb, 'students'));
+                    const students = snapshot.val() || {};
+                    const exists = Object.values(students).some(s => s.rollNo === "S-101");
+                    if (exists) {
+                      alert("Test Student S-101 already exists in master list.");
+                    } else {
+                      await set(push(rtdbRef(rtdb, 'students')), studentData);
+                      alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Roll Number: S-101\n6. Set your own password!");
+                    }
+                  } catch (e) {
+                    alert("Error seeding student: " + e.message);
+                  }
+                }}
+                style={{ background: '#28a745', color: 'white', padding: '10px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
+              >
+                Seed Test Student (S-101)
+              </button>
 
-                // 2. Note: For full login, the student must still go through "First Time Login" 
-                // or Admin must create the Firebase Auth account.
-                // To make it instant, we can try to create the Auth account if you are logged in as admin.
-                alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Roll Number: S-101\n6. Set your own password!");
-
-              } catch (e) {
-                alert("Error seeding student: " + e.message);
-        <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '20px' }}>
-          <h3>Debug Tools</h3>
-          <button onClick={async () => {
-            try {
-              const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
-              await set(timetablesRef, {
-                subject: "Introduction to CS",
-                teacherEmpId: "T-123", // Matches our test case
-                teacherName: "Test Teacher",
-                room: "101",
-                department: "Computer Science",
-                semester: "Semester 1"
-              });
-              alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
-            } catch (e) {
-              alert("Error seeding: " + e.message);
-            }
-          }} style={{ background: 'orange', color: 'white', padding: '10px', marginRight: '10px' }}>
-            Seed Timetable Data
-          </button>
-
-          <button onClick={async () => {
-            try {
-              const studentData = {
-                name: "Test Student",
-                email: "student@test.com",
-                department: "Computer Science",
-                semester: "1",
-                totalFees: 50000,
-                createdAt: Date.now()
-              };
-
-              // 1. Add to RTDB 'students' master list
-              const snapshot = await rtdbGet(rtdbRef(rtdb, 'students'));
-              const students = snapshot.val() || {};
-              const exists = Object.values(students).some(s => s.email === "student@test.com");
-              if (exists) {
-                alert("Test Student already exists in master list.");
-              } else {
-                await set(push(rtdbRef(rtdb, 'students')), studentData);
-              }
-            }} style={{ background: '#28a745', color: 'white', padding: '10px' }}>
-              Seed Test Student (S-101)
-            </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
+                    await set(timetablesRef, {
+                      subject: "Introduction to CS",
+                      teacherEmpId: "T-123",
+                      teacherName: "Test Teacher",
+                      room: "101",
+                      department: "Computer Science",
+                      semester: "Semester 1"
+                    });
+                    alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
+                  } catch (e) {
+                    alert("Error seeding: " + e.message);
+                  }
+                }}
+                style={{ background: 'orange', color: 'white', padding: '10px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
+              >
+                Seed Timetable Data
+              </button>
+            </div>
           </div>
         )}
         {activeMenu === 'users' && (
@@ -2197,10 +2177,6 @@ const AdminHomePage = () => {
             </div>
           </div>
         )}
-              // 2. Note: For full login, the student must still go through "First Time Login" 
-              // or Admin must create the Firebase Auth account.
-              // To make it instant, we can try to create the Auth account if you are logged in as admin.
-              alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Set your own password!");
 
         {activeMenu === "students" && (
           <div className="add-subject-section">
@@ -2266,10 +2242,6 @@ const AdminHomePage = () => {
                     <label>Phone Number</label>
                     <input value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} placeholder="Contact Number" />
                   </div>
-                  <div className="form-group">
-                    <label>Total Fees (Annual)</label>
-                    <input type="number" value={studentTotalFees} onChange={(e) => setStudentTotalFees(e.target.value)} />
-                  </div>
                 </div>
 
                 <div className="form-row">
@@ -2298,13 +2270,12 @@ const AdminHomePage = () => {
                   <button type="submit">{editingStudentId ? "Update Student" : "Add Student"}</button>
                   {editingStudentId && (
                     <button type="button" onClick={() => {
-                      setEditingStudentId(null); setStudentName(""); setStudentEmail(""); setStudentRollNo("");
+                      setEditingStudentId(null); setStudentName(""); setStudentEmail("");
                       setStudentDivision("A"); setStudentDOB("");
                       setStudentFatherName(""); setStudentMotherName("");
                       setStudentReligion(""); setStudentCaste(""); setStudentPhone("");
                       setStudentGuardianName(""); setStudentGuardianAddress("");
                       setStudentTotalFees(0);
-                      setEditingStudentId(null); setStudentName(""); setStudentEmail("");
                     }}>Cancel Edit</button>
                   )}
                   {editingStudentId && (
