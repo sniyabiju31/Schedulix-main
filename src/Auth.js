@@ -35,9 +35,9 @@ export default function Auth() {
       if (mode === "activate") {
         // FIRST TIME USER LOGIN (Staff or Student)
         const { email, employeeId, password } = form; // employeeId is used for Roll Number too
-        const collectionName = role === "staff" ? "teachers" : "students";
+        const collectionName = role === "staff" ? "teachers" : role === "parent" ? "parents" : "students";
         const idField = role === "staff" ? "employeeId" : "rollNo";
-        const roleLabel = role === "staff" ? "Staff" : "Student";
+        const roleLabel = role === "staff" ? "Staff" : role === "parent" ? "Parent" : "Student";
 
         // 1. Verify existence in RTDB
         const itemsRef = ref(rtdb, collectionName);
@@ -53,7 +53,7 @@ export default function Auth() {
         const itemKey = Object.keys(itemsData).find(key => itemsData[key][idField] === employeeId);
 
         if (!itemKey) {
-          alert(`${role === "staff" ? "Employee ID" : "Roll Number"} does not match the record for this Email. Please contact Admin.`);
+          alert(`${role === "staff" ? "Employee ID" : role === "parent" ? "Student Roll Number" : "Roll Number"} does not match the record for this Email. Please contact Admin.`);
           return;
         }
 
@@ -133,7 +133,7 @@ export default function Auth() {
             }, { merge: true });
 
             // alert("Account activation confirmed! Logging you in...");
-            window.location.href = role === "admin" ? "/admin-home" : role === "staff" ? "/staff-home" : "/student-home";
+            window.location.href = role === "admin" ? "/admin-home" : role === "staff" ? "/staff-home" : role === "parent" ? "/parent-home" : "/student-home";
           } else {
             throw authErr;
           }
@@ -249,6 +249,7 @@ export default function Auth() {
         // alert(`Signed up as ${userRole.toUpperCase()} — stored in '${userRole}' collection and RTDB.`);
         if (userRole === "admin") window.location.href = "/admin-home";
         else if (userRole === "staff") window.location.href = "/staff-home";
+        else if (userRole === "parent") window.location.href = "/parent-home";
         else window.location.href = "/student-home";
       } else {
         // Login using Firebase Authentication
@@ -282,6 +283,7 @@ export default function Auth() {
             // alert(`${role} login successful ✅`);
             if (role === "admin") window.location.href = "/admin-home";
             else if (role === "staff") window.location.href = "/staff-home";
+            else if (role === "parent") window.location.href = "/parent-home";
             else window.location.href = "/student-home";
           } else {
             let foundRole = null;
@@ -297,6 +299,7 @@ export default function Auth() {
               // alert(`Logged in as ${foundRole} (you selected ${role}) ✅`);
               if (foundRole === "admin") window.location.href = "/admin-home";
               else if (foundRole === "staff") window.location.href = "/staff-home";
+              else if (foundRole === "parent") window.location.href = "/parent-home";
               else window.location.href = "/student-home";
             } else {
               // AUTO-ACTIVATION: Check if they are in the teachers/ list but profiles are missing
@@ -434,7 +437,7 @@ export default function Auth() {
           )}
 
 
-          {(role === "staff" || role === "student") && (
+          {(role === "staff" || role === "student" || role === "parent") && (
             <button
               className={mode === "activate" ? "active" : ""}
               onClick={() => setMode("activate")}
@@ -468,6 +471,14 @@ export default function Auth() {
               onChange={() => setRole("student")}
             />
             Student
+          </label>
+          <label>
+            <input
+              type="radio"
+              checked={role === "parent"}
+              onChange={() => setRole("parent")}
+            />
+            Parent
           </label>
         </div>
 
@@ -531,8 +542,8 @@ export default function Auth() {
                 <input name="email" type="email" value={form.email} onChange={onChange} required />
               </div>
               <div className="field">
-                <label>{role === "staff" ? "Employee ID" : "Roll Number"}</label>
-                <input name="employeeId" value={form.employeeId} onChange={onChange} required placeholder="Provided by Admin" />
+                <label>{role === "staff" ? "Employee ID" : role === "parent" ? "Student Roll Number" : "Roll Number"}</label>
+                <input name="employeeId" value={form.employeeId} onChange={onChange} required placeholder={role === "parent" ? "Student's Roll Number" : "Provided by Admin"} />
               </div>
               <div className="field">
                 <label>New Password</label>
