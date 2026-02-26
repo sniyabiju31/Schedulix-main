@@ -342,7 +342,9 @@ const StaffHomePage = () => {
                     finalUser = {
                       ...finalUser,
                       isTutor: teacherRecord.isTutor || false,
-                      tutorClass: teacherRecord.tutorClass || "",
+                      tutorClassDept: teacherRecord.tutorClassDept || "",
+                      tutorClassSem: teacherRecord.tutorClassSem || "",
+                      tutorClassDiv: teacherRecord.tutorClassDiv || "",
                       isAdmissionDuty: teacherRecord.isAdmissionDuty || false,
                       admissionDutyStartDate: teacherRecord.admissionDutyStartDate || "",
                       admissionDutyEndDate: teacherRecord.admissionDutyEndDate || "",
@@ -420,21 +422,41 @@ const StaffHomePage = () => {
             // Iterate Semesters
             Object.keys(deptData).forEach(sem => {
               const semData = deptData[sem];
-              // Iterate Days
-              Object.keys(semData).forEach(day => {
-                const dayData = semData[day];
-                // Iterate Hours
-                Object.keys(dayData).forEach(hour => {
-                  const slot = dayData[hour];
-                  // Check if this slot belongs to the current teacher
-                  if (slot && slot.teacherEmpId === user.employeeId) {
-                    mySchedule[`${day}-${hour}`] = {
-                      ...slot,
-                      department: dept,
-                      semester: sem
-                    };
-                  }
-                });
+              // Iterate Divisions (or fallback for older data that doesn't have division layer)
+              Object.keys(semData).forEach(divOrDay => {
+                const divOrDayData = semData[divOrDay];
+
+                // If it's a day, it means it's older data without Division layer
+                if (['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].includes(divOrDay)) {
+                  // divOrDay is actually Day
+                  const day = divOrDay;
+                  const dayData = divOrDayData;
+                  Object.keys(dayData).forEach(hour => {
+                    const slot = dayData[hour];
+                    if (slot && slot.teacherEmpId === user.employeeId) {
+                      mySchedule[`${day}-${hour}`] = { ...slot, department: dept, semester: sem, division: 'A' };
+                    }
+                  });
+                } else {
+                  // divOrDay is Division
+                  const div = divOrDay;
+                  const divData = divOrDayData;
+                  Object.keys(divData).forEach(day => {
+                    const dayData = divData[day];
+                    Object.keys(dayData).forEach(hour => {
+                      const slot = dayData[hour];
+                      // Check if this slot belongs to the current teacher
+                      if (slot && slot.teacherEmpId === user.employeeId) {
+                        mySchedule[`${day}-${hour}`] = {
+                          ...slot,
+                          department: dept,
+                          semester: sem,
+                          division: div
+                        };
+                      }
+                    });
+                  });
+                }
               });
             });
           });
@@ -478,6 +500,65 @@ const StaffHomePage = () => {
     }
   };
 
+  // Tutor Class State
+  const [tutorDept, setTutorDept] = useState("");
+  const [tutorSem, setTutorSem] = useState("Semester 1");
+  const [tutorDiv, setTutorDiv] = useState("A");
+  const [tutorTimetable, setTutorTimetable] = useState({});
+  const [tutorStudentsList, setTutorStudentsList] = useState([]);
+  const [loadingTutorClass, setLoadingTutorClass] = useState(false);
+
+  useEffect(() => {
+    if (activeMenu === 'tutor-class' && user) {
+      if (!tutorDept && user.tutorClassDept) setTutorDept(user.tutorClassDept);
+      if (user.tutorClassSem) setTutorSem(user.tutorClassSem);
+      if (user.tutorClassDiv) setTutorDiv(user.tutorClassDiv);
+    }
+  }, [activeMenu, user, tutorDept]);
+
+  const fetchTutorClassConfig = async () => {
+    if (!tutorDept || !tutorSem || !tutorDiv) {
+      alert("Please select Department, Semester, and Division to view.");
+      return;
+    }
+    setLoadingTutorClass(true);
+    try {
+      // 1. Fetch Timetable
+      const ttRef = ref(rtdb, `timetables/${tutorDept}/${tutorSem}/${tutorDiv}`);
+      const ttSnap = await get(ttRef);
+      if (ttSnap.exists()) {
+        setTutorTimetable(ttSnap.val());
+      } else {
+        // Fallback to older structure without division if needed, or set empty
+        const ptRef = ref(rtdb, `timetables/${tutorDept}/${tutorSem}`);
+        const ptSnap = await get(ptRef);
+        if (ptSnap.exists() && ptSnap.val().Monday && ptSnap.val().Monday['9:00-9:50']) {
+          setTutorTimetable(ptSnap.val());
+        } else {
+          setTutorTimetable({});
+        }
+      }
+
+      // 2. Fetch Students
+      const stdRef = ref(rtdb, 'students');
+      const stdSnap = await get(stdRef);
+      if (stdSnap.exists()) {
+        const allStd = stdSnap.val();
+        const filtered = Object.keys(allStd).map(k => ({ id: k, ...allStd[k] }))
+          .filter(s => s.department === tutorDept && s.semester === tutorSem && (s.division === tutorDiv || (!s.division && tutorDiv === 'A')));
+        setTutorStudentsList(filtered);
+      } else {
+        setTutorStudentsList([]);
+      }
+    } catch (err) {
+      console.error("Error fetching tutor class details:", err);
+      alert("Error fetching details: " + err.message);
+    } finally {
+      setLoadingTutorClass(false);
+    }
+  };
+
+
   return (
     <div className="home-layout">
       {/* Sidebar */}
@@ -515,6 +596,14 @@ const StaffHomePage = () => {
               onClick={() => setActiveMenu("my-students")}
             >
               <Users size={20} className="menu-icon" /> Student Admissions
+            </li>
+          )}
+          {user && (user.isTutor === true || user.isTutor === "true") && (
+            <li
+              className={activeMenu === "tutor-class" ? "active" : ""}
+              onClick={() => setActiveMenu("tutor-class")}
+            >
+              <Users size={20} className="menu-icon" /> My Tutor Class
             </li>
           )}
         </ul>
@@ -577,7 +666,7 @@ const StaffHomePage = () => {
                 {user && (user.isTutor === true || user.isTutor === "true") && (
                   <div className="info-item">
                     <label>Assigned Class:</label>
-                    <span>{user.tutorClass || "N/A"}</span>
+                    <span>{user.tutorClassDept ? `${user.tutorClassDept} - ${user.tutorClassSem} (${user.tutorClassDiv})` : "N/A"}</span>
                   </div>
                 )}
               </div>
@@ -608,18 +697,19 @@ const StaffHomePage = () => {
                           <td
                             key={day + hour}
                             className={slot ? "has-class" : ""}
-                            onClick={() => slot && alert(`Class: ${slot.subject}\nDept: ${slot.department}\nSem: ${slot.semester}`)}
+                            onClick={() => slot && alert(`Class: ${slot.subject}\nDept: ${slot.department}\nSem: ${slot.semester}\nDiv: ${slot.division}`)}
                           >
                             {slot ? (
                               <div className="slot-info">
                                 <span className="subject">{slot.subject}</span>
                                 <span className="details">{slot.semester} - {slot.department}</span>
+                                <span className="details" style={{ fontWeight: 'bold' }}>Sec: {slot.division}</span>
                               </div>
                             ) : (
                               <span className="slot"></span>
                             )}
                           </td>
-                        )
+                        );
                       })}
                     </tr>
                   ))}
@@ -894,6 +984,116 @@ const StaffHomePage = () => {
                 </>
               )}
             </div>
+          </div>
+        )}
+
+        {activeMenu === "tutor-class" && (
+          <div className="home-container">
+            <h1>My Tutor Class</h1>
+            <p className="subtitle">View timetable and student list for your assigned batch.</p>
+
+            <div className="selector-section" style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'center', background: 'rgba(15, 23, 42, 0.5)', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+              <div className="selector">
+                <label>Department:</label>
+                <select value={tutorDept} onChange={(e) => setTutorDept(e.target.value)}>
+                  {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="selector">
+                <label>Semester:</label>
+                <select value={tutorSem} onChange={(e) => setTutorSem(e.target.value)}>
+                  {Array.from({ length: 8 }, (_, i) => `Semester ${i + 1}`).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="selector">
+                <label>Division:</label>
+                <select value={tutorDiv} onChange={(e) => setTutorDiv(e.target.value)}>
+                  {['A', 'B', 'C', 'D'].map(d => <option key={d} value={d}>Section {d}</option>)}
+                </select>
+              </div>
+              <button
+                onClick={fetchTutorClassConfig}
+                className="save-btn"
+                style={{ marginLeft: 'auto', background: 'linear-gradient(90deg, #6366f1 0%, #4f46e5 100%)' }}
+              >
+                Fetch Class Details
+              </button>
+            </div>
+
+            {loadingTutorClass ? <p>Loading class details...</p> : (
+              <>
+                <div style={{ marginBottom: '40px' }}>
+                  <h3>Class Timetable</h3>
+                  {Object.keys(tutorTimetable).length > 0 ? (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="timetable" style={{ minWidth: '800px' }}>
+                        <thead>
+                          <tr>
+                            <th>Time</th>
+                            {days.map(d => <th key={d}>{d}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hours.map(hour => (
+                            <tr key={hour}>
+                              <td>{hour}</td>
+                              {days.map(day => {
+                                const slot = tutorTimetable[day] ? tutorTimetable[day][hour] : null;
+                                return (
+                                  <td key={`${day}-${hour}`} className={slot ? "has-class" : ""}>
+                                    {slot ? (
+                                      <div className="slot-info">
+                                        <span className="subject">{slot.subject}</span>
+                                        <span className="details">{slot.teacherName}</span>
+                                        <span className="details">{slot.room}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="slot">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p style={{ color: '#cbd5e1' }}>No timetable published yet for this class.</p>
+                  )}
+                </div>
+
+                <div>
+                  <h3>Enrolled Students ({tutorStudentsList.length})</h3>
+                  {tutorStudentsList.length > 0 ? (
+                    <div style={{ overflowX: 'auto', marginTop: '10px' }}>
+                      <table className="subjects-table">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Roll No</th>
+                            <th>Email</th>
+                            <th>Dept</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tutorStudentsList.map(s => (
+                            <tr key={s.id}>
+                              <td style={{ fontWeight: 'bold' }}>{s.name}</td>
+                              <td>{s.rollNo || '-'}</td>
+                              <td>{s.email || '-'}</td>
+                              <td>{s.department || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p style={{ color: '#cbd5e1' }}>No students found enrolled in {tutorDept} - {tutorSem} - Div {tutorDiv}.</p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </main>

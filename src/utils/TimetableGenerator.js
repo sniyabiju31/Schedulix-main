@@ -36,7 +36,15 @@ export class TimetableGenerator {
         // Expand subjects for each division
         const expandedSubjects = [];
         this.subjects.forEach(sub => {
-            divisions.forEach(div => {
+            let divArray = divisions;
+            // Support passing an object mapping semester to its divisions array
+            if (!Array.isArray(divisions) && typeof divisions === 'object') {
+                divArray = divisions[sub.semester] || ['A'];
+            } else if (!Array.isArray(divisions)) {
+                divArray = ['A'];
+            }
+
+            divArray.forEach(div => {
                 expandedSubjects.push({ ...sub, division: div });
             });
         });
@@ -45,8 +53,25 @@ export class TimetableGenerator {
         const classes = this.groupSubjectsByClass(expandedSubjects);
         console.log("Generator - Classes to schedule:", Object.keys(classes));
 
-        // Process each class
-        for (const classKey in classes) {
+        // Sort class keys based on semester:
+        // Period 1 (active first): Semesters 1, 3, 5, 7 (odd)
+        // Period 2 (active after): Semesters 2, 4, 6, 8 (even)
+        const classKeys = Object.keys(classes).sort((a, b) => {
+            // Extract the semester number from keys (e.g., "Computer Science-Semester 6-A" or "CS-6-A")
+            const semA = parseInt(a.split('-')[1].replace(/\D/g, '')) || 0;
+            const semB = parseInt(b.split('-')[1].replace(/\D/g, '')) || 0;
+
+            const isOddA = semA % 2 !== 0;
+            const isOddB = semB % 2 !== 0;
+
+            if (isOddA && !isOddB) return -1; // a comes first
+            if (!isOddA && isOddB) return 1;  // b comes first
+
+            return 0; // If both odd or both even, maintain relative order
+        });
+
+        // Process each class sequentially based on new sorting
+        for (const classKey of classKeys) {
             const classSubjects = classes[classKey];
             const sample = classSubjects[0];
             const dept = sample.department;
@@ -289,7 +314,41 @@ export class TimetableGenerator {
         // Combine: Preferred First -> Then Others
         possibleTeachers = [...possibleTeachers, ...otherDeptTeachers];
 
-        if (possibleTeachers.length === 0) {
+        // NEW CONSTRAINT: A single teacher can only take a single subject in a class
+        // Filter out teachers who are already teaching a DIFFERENT subject in this class
+        possibleTeachers = possibleTeachers.filter(t => {
+            if (!t) return true;
+            const isTeachingAnotherSubject = Object.values(this.timetables[dept][sem][div] || {}).some(dayObj => {
+                return Object.values(dayObj).some(s => s.teacherId === t.id && s.subject !== subject.name);
+            });
+            return !isTeachingAnotherSubject;
+        });
+
+        // NEW CONSTRAINT: A single subject in a class must be taught by a single teacher
+        // If this subject is already being taught by someone in this class, ONLY that teacher can be selected
+        let existingTeacherIdForSubject = null;
+        let subjectAlreadyAssigned = false;
+
+        Object.values(this.timetables[dept][sem][div] || {}).forEach(dayObj => {
+            Object.values(dayObj).forEach(s => {
+                if (s.subject === subject.name) {
+                    subjectAlreadyAssigned = true;
+                    if (s.teacherId) {
+                        existingTeacherIdForSubject = s.teacherId;
+                    }
+                }
+            });
+        });
+
+        if (existingTeacherIdForSubject) {
+            // Strictly reduce possibleTeachers to just this teacher
+            possibleTeachers = possibleTeachers.filter(t => t && t.id === existingTeacherIdForSubject);
+        } else if (subjectAlreadyAssigned) {
+            // If subject was assigned but with NO teacher (Unassigned), must remain Unassigned
+            possibleTeachers = [null];
+        }
+
+        if (possibleTeachers.length === 0 && !existingTeacherIdForSubject) {
             console.warn(`No teacher found for ${subject.name} in ${dept}. Using 'Unassigned'.`);
             possibleTeachers = [null];
         }
@@ -310,10 +369,10 @@ export class TimetableGenerator {
         for (let d = 0; d < sortedDays.length; d++) {
             const day = sortedDays[d];
 
-            // Hard Constraint: Max 2 periods per day for Theory
+            // Hard Constraint: Max 1 period per day for Theory
             if (currentSlotRequest.type === 'Theory') {
-                if (getDailySubjectCount(day) >= 2) {
-                    this.log(`Rejected ${subject.name} on ${day}: Max 2 theory/day`);
+                if (getDailySubjectCount(day) >= 1) {
+                    this.log(`Rejected ${subject.name} on ${day}: Max 1 theory/day`);
                     continue;
                 }
             }
