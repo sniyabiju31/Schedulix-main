@@ -1992,6 +1992,53 @@ const AdminHomePage = () => {
         {activeMenu === 'overview' && (
           <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '20px' }}>
             <h3>Debug Tools</h3>
+            <button onClick={async () => {
+              try {
+                const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
+                await set(timetablesRef, {
+                  subject: "Introduction to CS",
+                  teacherEmpId: "T-123", // Matches our test case
+                  teacherName: "Test Teacher",
+                  room: "101",
+                  department: "Computer Science",
+                  semester: "Semester 1"
+                });
+                alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
+              } catch (e) {
+                alert("Error seeding: " + e.message);
+              }
+            }} style={{ background: 'orange', color: 'white', padding: '10px', marginRight: '10px' }}>
+              Seed Timetable Data
+            </button>
+
+            <button onClick={async () => {
+              try {
+                const studentData = {
+                  name: "Test Student",
+                  email: "student@test.com",
+                  rollNo: "S-101",
+                  department: "Computer Science",
+                  semester: "1",
+                  totalFees: 50000,
+                  createdAt: Date.now()
+                };
+
+                // 1. Add to RTDB 'students' master list
+                const snapshot = await rtdbGet(rtdbRef(rtdb, 'students'));
+                const students = snapshot.val() || {};
+                const exists = Object.values(students).some(s => s.email === "student@test.com");
+                if (exists) {
+                  alert("Test Student already exists in master list.");
+                } else {
+                  await set(push(rtdbRef(rtdb, 'students')), studentData);
+                }
+                alert("Seed Successful! Go check Login.");
+              } catch (e) {
+                alert("Error: " + e.message);
+              }
+            }} style={{ background: '#28a745', color: 'white', padding: '10px' }}>
+              Seed Test Student (S-101)
+            </button>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 onClick={async () => {

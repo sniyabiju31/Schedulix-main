@@ -4,6 +4,7 @@ import Auth from "./Auth";
 import AdminHomePage from "./AdminHome";
 import StaffHomePage from "./home";
 import StudentHomePage from "./StudentHome";
+import ParentHomePage from "./ParentHome";
 import "./App.css";
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
           <Route path="/admin-home" element={<AdminHomePage />} />
           <Route path="/staff-home" element={<StaffHomePage />} />
           <Route path="/student-home" element={<StudentHomePage />} />
+          <Route path="/parent-home" element={<ParentHomePage />} />
         </Routes>
       </div>
     </Router>

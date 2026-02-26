@@ -45,7 +45,7 @@ body {
 /* Glassmorphism Card */
 .auth-card {
   width: 100%;
-  max-width: 440px;
+  max-width: 500px;
   background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -136,9 +136,9 @@ body {
   border: 1px solid rgba(0, 243, 255, 0.2);
 }
 
-/* Role Toggle (Cards) */
 .role-toggle {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 32px;
   justify-content: center;
@@ -289,5 +289,6 @@ body {
 
   .role-toggle {
     flex-direction: row;
+    flex-wrap: wrap;
   }
 }
