@@ -273,11 +273,14 @@ body {
 .selector-section {
   margin-bottom: 30px;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 20px;
   background: rgba(15, 23, 42, 0.5);
-  padding: 15px;
+  padding: 15px 20px;
   border: 1px solid var(--glass-border);
-  border-radius: 4px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .selector {
@@ -324,13 +327,14 @@ body {
   background: rgba(15, 23, 42, 1);
 }
 
-/* --- Table Styles --- */
+/* --- Table Styles (Cyber-Academia Theme) --- */
 .admin-timetable,
 .subjects-table,
 .users-table {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 0;
+  border-spacing: 4px;
+  /* Space between cells for a card-like grid feel */
   overflow: hidden;
   margin-top: 20px;
 }
@@ -338,78 +342,108 @@ body {
 .admin-timetable th,
 .subjects-table th,
 .users-table th {
-  background: rgba(0, 243, 255, 0.05);
-  /* Very subtle cyan tint */
+  background: rgba(0, 243, 255, 0.1);
   color: var(--accent-cyan);
   font-family: var(--font-heading);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  text-align: left;
-  padding: 18px;
-  border-bottom: 1px solid var(--glass-border);
+  letter-spacing: 2px;
+  text-align: center;
+  padding: 16px;
+  border-bottom: 2px solid var(--accent-violet);
+  border-radius: 6px;
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
 }
 
 .admin-timetable td,
 .subjects-table td,
 .users-table td {
-  padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 0.9rem;
-  color: #cbd5e1;
+  color: #e2e8f0;
   font-family: var(--font-mono);
-  /* Terminal font for data */
-  border-right: 1px solid rgba(255, 255, 255, 0.02);
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 6px;
+  transition: all 0.3s ease;
 }
 
 .admin-timetable td:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* Timetable specific cells */
 .timetable-cell {
-  background: rgba(255, 255, 255, 0.01);
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
   vertical-align: top;
   cursor: pointer;
-  transition: background 0.2s;
+  height: 100px;
+  /* Fixed height for consistent grid */
   position: relative;
+  overflow: hidden;
+  border-left: 2px solid transparent;
 }
 
 .timetable-cell:hover {
-  background: rgba(0, 243, 255, 0.1) !important;
-  box-shadow: inset 0 0 15px rgba(0, 243, 255, 0.1);
+  background: rgba(0, 243, 255, 0.08) !important;
+  border-left: 2px solid var(--accent-cyan);
+  box-shadow: inset 0 0 20px rgba(0, 243, 255, 0.15), 0 0 15px rgba(0, 243, 255, 0.2);
+  transform: translateY(-2px);
 }
 
 .class-info {
-  border-left: 2px solid var(--accent-violet);
-  padding-left: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  text-align: center;
+  padding: 5px;
 }
 
 .class-info .subject {
   color: #fff;
-  font-weight: 700;
-  font-size: 0.9rem;
-  letter-spacing: 0.5px;
-  text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px rgba(0, 243, 255, 0.6);
+  margin-bottom: 4px;
 }
 
 .class-info .teacher {
   color: var(--text-secondary);
-  font-size: 0.75rem;
-  margin-top: 2px;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  margin-bottom: 4px;
+  opacity: 0.8;
 }
 
 .class-info .room {
   color: var(--accent-cyan);
-  font-size: 0.8rem;
-  font-weight: 600;
-  margin-top: 4px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: rgba(0, 243, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+  border: 1px solid rgba(0, 243, 255, 0.3);
 }
 
 .slot {
-  color: rgba(255, 255, 255, 0.05);
-  font-size: 1.5rem;
-  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: rgba(0, 243, 255, 0.3);
+  font-size: 2rem;
+  font-weight: 300;
+  transition: all 0.3s ease;
+}
+
+.timetable-cell:hover .slot {
+  color: var(--accent-violet);
+  text-shadow: 0 0 15px var(--accent-violet);
+  transform: scale(1.2);
 }
 
 /* --- Forms --- */
