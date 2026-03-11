@@ -18,6 +18,17 @@ const departments = ["Computer Science", "Electronics & Communication", "Mechani
 const schemes = ["2015 Scheme", "2019 Scheme", "2024 Scheme"];
 const categories = ["Core", "Elective", "Non Credit", "Minor", "Honor"];
 
+const deptCodes = {
+  "Computer Science": "CS",
+  "Electronics & Communication": "EC",
+  "Mechanical Engineering": "ME",
+  "Civil Engineering": "CE",
+  "Electrical & Electronics": "EE",
+  "Information Technology": "IT",
+  "Artificial Intelligence": "AI",
+  "Cyber Security": "CY"
+};
+
 const AdminHomePage = () => {
   const [user, setUser] = useState(null);
   const [activeMenu, setActiveMenu] = useState("overview");
@@ -91,7 +102,11 @@ const AdminHomePage = () => {
   const [editingStudentId, setEditingStudentId] = useState(null);
   const [studentsList, setStudentsList] = useState([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
-  const [studentSortBy, setStudentSortBy] = useState('department');
+  const [studentFilterDept, setStudentFilterDept] = useState("All");
+  const [studentFilterYear, setStudentFilterYear] = useState("All");
+  const [showStudentForm, setShowStudentForm] = useState(false);
+  const [collegeCode, setCollegeCode] = useState("JEC");
+  const [admissionYear, setAdmissionYear] = useState(new Date().getFullYear().toString().slice(-2));
 
   // Settings State
   const [windowStart, setWindowStart] = useState("");
@@ -525,6 +540,7 @@ const AdminHomePage = () => {
     setStudentGuardianAddress(student.guardianAddress || "");
     setStudentTotalFees(student.totalFees || 0);
     setActiveMenu("students");
+    setShowStudentForm(true);
   };
 
   const handleAddStudentSubmit = async (e) => {
@@ -619,6 +635,20 @@ const AdminHomePage = () => {
       setStudentGuardianName(""); setStudentGuardianAddress("");
       setStudentTotalFees(0);
       setEditingStudentId(null);
+      setStudentName("");
+      setStudentEmail("");
+      setStudentDivision("A");
+      setStudentDOB("");
+      setStudentFatherName("");
+      setStudentMotherName("");
+      setStudentReligion("");
+      setStudentCaste("");
+      setStudentPhone("");
+      setStudentGuardianName("");
+      setStudentGuardianAddress("");
+      setStudentTotalFees(0);
+      setEditingStudentId(null);
+      setShowStudentForm(false);
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -1467,6 +1497,59 @@ const AdminHomePage = () => {
     }
   };
 
+  const handleGenerateRegisterNumbers = async () => {
+    if (!window.confirm("This will generate/overwrite register numbers for ALL students. This might take a moment. Continue?")) return;
+
+    setLoadingStudents(true);
+    try {
+      const grouped = {};
+      // Group by department
+      studentsList.forEach(s => {
+        const dept = s.department || "Unassigned";
+        if (!grouped[dept]) grouped[dept] = [];
+        grouped[dept].push(s);
+      });
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const dept of Object.keys(grouped)) {
+        const deptCode = deptCodes[dept] || "XX";
+        const sorted = grouped[dept].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+        for (let i = 0; i < sorted.length; i++) {
+          const student = sorted[i];
+          const sequenceNum = (i + 1).toString().padStart(3, '0');
+          const registerNo = `${collegeCode}${admissionYear}${deptCode}${sequenceNum}`;
+
+          try {
+            // Update student record
+            await update(rtdbRef(rtdb, `students/${student.id}`), { registerNo });
+            // Update user record
+            await update(rtdbRef(rtdb, `users/${student.id}`), { registerNo });
+            successCount++;
+          } catch (itemErr) {
+            console.error(`Failed to update student ${student.id}:`, itemErr);
+            errorCount++;
+          }
+        }
+      }
+
+      alert(`Process Complete!\n\nSuccessfully updated: ${successCount} students\nErrors encountered: ${errorCount}`);
+
+      // Refresh list
+      const snap = await rtdbGet(rtdbRef(rtdb, 'students'));
+      if (snap.exists()) {
+        const data = snap.val();
+        setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a, b) => (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "")));
+      }
+    } catch (err) {
+      alert("Critical Error: " + err.message);
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
   return (
     <div className="admin-layout">
       {/* Sidebar */}
@@ -2189,6 +2272,29 @@ const AdminHomePage = () => {
           <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '20px' }}>
             <h3>Debug Tools</h3>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={async () => {
+                  try {
+                    const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
+                    await set(timetablesRef, {
+                      subject: "Introduction to CS",
+                      teacherEmpId: "T-123",
+                      teacherName: "Test Teacher",
+                      room: "101",
+                      department: "Computer Science",
+                      semester: "Semester 1"
+                    });
+                    alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
+                  } catch (e) {
+                    alert("Error seeding timetable: " + e.message);
+                  }
+                }}
+                style={{ background: 'orange', color: 'white', padding: '10px' }}
+              >
+                Seed Timetable Data
+              </button>
+
               <button
                 onClick={async () => {
                   try {
@@ -2205,12 +2311,14 @@ const AdminHomePage = () => {
                     const snapshot = await rtdbGet(rtdbRef(rtdb, 'students'));
                     const students = snapshot.val() || {};
                     const exists = Object.values(students).some(s => s.email === "student@test.com" || s.rollNo === "S-101");
+                    const exists = Object.values(students).some(s => s.email === "student@test.com");
 
                     if (exists) {
                       alert("Test Student already exists in master list.");
                     } else {
                       await set(push(rtdbRef(rtdb, 'students')), studentData);
                       alert("Seed Successful!\\n\\n1. Go to Login\\n2. Select 'Student' role\\n3. Click 'First Time Login'\\n4. Email: student@test.com\\n5. Roll Number: S-101\\n6. Set your own password!");
+                      alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Set your own password!");
                     }
                   } catch (e) {
                     alert("Error seeding student: " + e.message);
@@ -2241,6 +2349,10 @@ const AdminHomePage = () => {
                 style={{ background: 'orange', color: 'white', padding: '10px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
               >
                 Seed Timetable Data
+              </button>
+                style={{ background: '#28a745', color: 'white', padding: '10px' }}
+              >
+                Seed Test Student (S-101)
               </button>
             </div>
           </div>
@@ -2377,20 +2489,44 @@ const AdminHomePage = () => {
 
         {activeMenu === "students" && (
           <div className="add-subject-section">
-            <h1>Student Management</h1>
-            <div className="form-container" style={{ maxWidth: '700px' }}>
-              <h2>{editingStudentId ? "Edit Student" : "Add New Student"}</h2>
-              <form onSubmit={handleAddStudentSubmit}>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Name</label>
-                    <input value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="Full Name" />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h1>Student Management</h1>
+              <button
+                onClick={() => {
+                  if (showStudentForm) {
+                    // Reset form when closing
+                    setEditingStudentId(null);
+                    setStudentName("");
+                    setStudentEmail("");
+                    // ... reset other states
+                  }
+                  setShowStudentForm(!showStudentForm);
+                }}
+                className="edit-btn"
+                style={{ background: showStudentForm ? '#6b7280' : 'var(--accent-cyan)', color: 'white' }}
+              >
+                {showStudentForm ? "Hide Form" : (editingStudentId ? "Edit Student" : "+ Add New Student")}
+              </button>
+            </div>
+
+            {showStudentForm && (
+              <div className="form-container" style={{ maxWidth: '800px', marginBottom: '30px', padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <h2 style={{ marginTop: 0 }}>{editingStudentId ? "Edit Student Details" : "Register New Student"}</h2>
+                <form onSubmit={handleAddStudentSubmit}>
+                  {/* Basic Info */}
+                  <div className="form-row cols-2">
+                    <div className="form-group">
+                      <label>Full Name</label>
+                      <input value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="Full Name" required />
+                    </div>
+                    <div className="form-group">
+                      <label>Email Address</label>
+                      <input type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} placeholder="student@school.com" required />
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Email</label>
-                    <input type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} placeholder="student@school.com" />
-                  </div>
-                  <div className="form-row">
+
+                  {/* Academic Info */}
+                  <div className="form-row cols-3">
                     <div className="form-group">
                       <label>Department</label>
                       <select value={studentDept} onChange={(e) => setStudentDept(e.target.value)}>
@@ -2403,36 +2539,41 @@ const AdminHomePage = () => {
                         {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s.toString()}>Semester {s}</option>)}
                       </select>
                     </div>
+                    <div className="form-group">
+                      <label>Division</label>
+                      <select value={studentDivision} onChange={(e) => setStudentDivision(e.target.value)}>
+                        {["A", "B", "C", "D", "E"].map(div => <option key={div} value={div}>Division {div}</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Total Fees (Annual)</label>
-                    <input type="number" value={studentTotalFees} onChange={(e) => setStudentTotalFees(e.target.value)} />
-                  </div>
-                </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Division</label>
-                    <select value={studentDivision} onChange={(e) => setStudentDivision(e.target.value)}>
-                      {["A", "B", "C", "D", "E"].map(div => <option key={div} value={div}>Division {div}</option>)}
-                    </select>
+                  {/* Personal Info */}
+                  <div className="form-row cols-3">
+                    <div className="form-group">
+                      <label>Phone Number</label>
+                      <input value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} placeholder="Contact Number" />
+                    </div>
+                    <div className="form-group">
+                      <label>Date of Birth</label>
+                      <input type="date" value={studentDOB} onChange={(e) => setStudentDOB(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label>Annual Fees</label>
+                      <input type="number" value={studentTotalFees} onChange={(e) => setStudentTotalFees(e.target.value)} placeholder="0" />
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Date of Birth</label>
-                    <input type="date" value={studentDOB} onChange={(e) => setStudentDOB(e.target.value)} />
-                  </div>
-                </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Father's Name</label>
-                    <input value={studentFatherName} onChange={(e) => setStudentFatherName(e.target.value)} placeholder="Father's Name" />
+                  {/* Family Info */}
+                  <div className="form-row cols-2">
+                    <div className="form-group">
+                      <label>Father's Name</label>
+                      <input value={studentFatherName} onChange={(e) => setStudentFatherName(e.target.value)} placeholder="Father's Name" />
+                    </div>
+                    <div className="form-group">
+                      <label>Mother's Name</label>
+                      <input value={studentMotherName} onChange={(e) => setStudentMotherName(e.target.value)} placeholder="Mother's Name" />
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Mother's Name</label>
-                    <input value={studentMotherName} onChange={(e) => setStudentMotherName(e.target.value)} placeholder="Mother's Name" />
-                  </div>
-                </div>
 
                 <div className="form-row">
                   <div className="form-group">
@@ -2440,28 +2581,93 @@ const AdminHomePage = () => {
                     <input value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} placeholder="Contact Number" />
                   </div>
                 </div>
+                  {/* Identity Info */}
+                  <div className="form-row cols-2">
+                    <div className="form-group">
+                      <label>Religion</label>
+                      <input value={studentReligion} onChange={(e) => setStudentReligion(e.target.value)} placeholder="e.g. Hindu" />
+                    </div>
+                    <div className="form-group">
+                      <label>Caste / Category</label>
+                      <input value={studentCaste} onChange={(e) => setStudentCaste(e.target.value)} placeholder="Caste" />
+                    </div>
+                  </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Religion</label>
-                    <input value={studentReligion} onChange={(e) => setStudentReligion(e.target.value)} placeholder="e.g. Hindu, Muslim, Christian" />
+                  {/* Guardian Info */}
+                  <div className="form-row cols-2">
+                    <div className="form-group">
+                      <label>Guardian Name</label>
+                      <input value={studentGuardianName} onChange={(e) => setStudentGuardianName(e.target.value)} placeholder="Guardian Name" />
+                    </div>
+                    <div className="form-group">
+                      <label>Guardian Address</label>
+                      <input value={studentGuardianAddress} onChange={(e) => setStudentGuardianAddress(e.target.value)} placeholder="Guardian Address" />
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label>Caste</label>
-                    <input value={studentCaste} onChange={(e) => setStudentCaste(e.target.value)} placeholder="Caste" />
-                  </div>
-                </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Guardian Name</label>
-                    <input value={studentGuardianName} onChange={(e) => setStudentGuardianName(e.target.value)} placeholder="Guardian Name" />
+                  <div className="form-buttons" style={{ marginTop: '10px' }}>
+                    <button type="submit" style={{ background: 'var(--accent-cyan)' }}>{editingStudentId ? "Update Student" : "Register Student"}</button>
+                    <button type="button" onClick={() => {
+                      setShowStudentForm(false);
+                      setEditingStudentId(null);
+                      setStudentName("");
+                      setStudentEmail("");
+                      setStudentDivision("A");
+                      setStudentDOB("");
+                      setStudentFatherName("");
+                      setStudentMotherName("");
+                      setStudentReligion("");
+                      setStudentCaste("");
+                      setStudentPhone("");
+                      setStudentGuardianName("");
+                      setStudentGuardianAddress("");
+                      setStudentTotalFees(0);
+                    }} style={{ background: 'rgba(255,255,255,0.1)' }}>Cancel</button>
+                    {editingStudentId && (
+                      <button type="button" onClick={handleDeleteStudent} style={{ marginLeft: 'auto', background: '#dc3545', color: 'white' }}>Delete Student</button>
+                    )}
                   </div>
-                  <div className="form-group">
-                    <label>Guardian Address</label>
-                    <input value={studentGuardianAddress} onChange={(e) => setStudentGuardianAddress(e.target.value)} placeholder="Guardian Address" />
+                </form>
+              </div>
+            )}
+
+            <div style={{ marginTop: 30 }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '12px', marginBottom: '25px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <h3 style={{ marginTop: 0, fontSize: '1.1rem', color: 'var(--accent-cyan)' }}>Register Number Generator</h3>
+                <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: '0.8rem' }}>College Code</label>
+                    <input
+                      value={collegeCode}
+                      onChange={(e) => setCollegeCode(e.target.value.toUpperCase())}
+                      placeholder="JEC"
+                      style={{ width: '100px' }}
+                    />
                   </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: '0.8rem' }}>Admission Year</label>
+                    <input
+                      value={admissionYear}
+                      onChange={(e) => setAdmissionYear(e.target.value)}
+                      placeholder="23"
+                      style={{ width: '80px' }}
+                    />
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: '0.9rem', paddingBottom: '10px' }}>
+                    Preview: <span style={{ color: 'var(--accent-cyan)', fontWeight: 'bold' }}>{collegeCode}{admissionYear}XX###</span>
+                  </div>
+                  <button
+                    onClick={handleGenerateRegisterNumbers}
+                    className="edit-btn"
+                    style={{ background: 'var(--accent-violet)', color: 'white', border: 'none' }}
+                  >
+                    Generate for All
+                  </button>
                 </div>
+                <p style={{ margin: '10px 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                  * This will assign sequential numbers (001, 002...) to students sorted alphabetically within each department.
+                </p>
+              </div>
 
                 <div className="form-buttons">
                   <button type="submit">{editingStudentId ? "Update Student" : "Add Student"}</button>
@@ -2484,38 +2690,90 @@ const AdminHomePage = () => {
 
             <div style={{ marginTop: 30 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '15px' }}>
                 <h2>All Students</h2>
-                <div className="selector">
-                  <label>Sort by:</label>
-                  <select value={studentSortBy} onChange={(e) => setStudentSortBy(e.target.value)}>
-                    <option value="department">Department</option>
-                    <option value="name">Name (A-Z)</option>
-                  </select>
+                <div style={{ display: 'flex', gap: '15px' }}>
+                  <div className="selector">
+                    <label>Filter by Dept:</label>
+                    <select value={studentFilterDept} onChange={(e) => setStudentFilterDept(e.target.value)}>
+                      <option value="All">All Departments</option>
+                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div className="selector">
+                    <label>Filter by Year:</label>
+                    <select value={studentFilterYear} onChange={(e) => setStudentFilterYear(e.target.value)}>
+                      <option value="All">All Years</option>
+                      <option value="1">First Year</option>
+                      <option value="2">Second Year</option>
+                      <option value="3">Third Year</option>
+                      <option value="4">Fourth Year</option>
+                    </select>
+                  </div>
                 </div>
               </div>
               <table className="subjects-table">
                 <thead>
-                  <tr><th>S.No</th><th>Name</th><th>Email</th><th>Dept</th><th>Sem</th><th>Actions</th></tr>
+                  <tr><th>S.No</th><th>Reg.No</th><th>Name</th><th>Email</th><th>Dept</th><th>Sem</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
-                  {[...studentsList].sort((a, b) => {
-                    if (studentSortBy === 'name') {
-                      return (a.name || "").localeCompare(b.name || "");
+                  {(() => {
+                    const filtered = studentsList.filter(s => {
+                      const matchesDept = studentFilterDept === "All" || s.department === studentFilterDept;
+                      const sem = parseInt(s.semester);
+                      let matchesYear = true;
+                      if (studentFilterYear !== "All") {
+                        const targetYear = parseInt(studentFilterYear);
+                        const studentYear = Math.ceil(sem / 2);
+                        matchesYear = studentYear === targetYear;
+                      }
+                      return matchesDept && matchesYear;
+                    });
+
+                    // Group by department
+                    const groups = {};
+                    filtered.forEach(s => {
+                      const dept = s.department || "Unassigned";
+                      if (!groups[dept]) groups[dept] = [];
+                      groups[dept].push(s);
+                    });
+
+                    // Sort departments
+                    const sortedDepts = Object.keys(groups).sort();
+
+                    if (sortedDepts.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No students found matching filters.</td>
+                        </tr>
+                      );
                     }
-                    // Default sort: Department then Name
-                    return (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "");
-                  }).map((s, index) => (
-                    <tr key={s.id}>
-                      <td>{index + 1}</td>
-                      <td>{s.name}</td>
-                      <td>{s.email}</td>
-                      <td>{s.department}</td>
-                      <td>{s.semester}</td>
-                      <td>
-                        <button onClick={() => handleEditStudent(s)} className="edit-btn">Edit</button>
-                      </td>
-                    </tr>
-                  ))}
+
+                    return sortedDepts.map(dept => (
+                      <React.Fragment key={dept}>
+                        <tr className="dept-header-row" style={{ background: 'rgba(56, 189, 248, 0.1)' }}>
+                          <td colSpan="7" style={{ fontWeight: 'bold', color: '#38bdf8', padding: '12px', borderLeft: '4px solid #38bdf8' }}>
+                            {dept.toUpperCase()} — {groups[dept].length} {groups[dept].length === 1 ? 'Student' : 'Students'}
+                          </td>
+                        </tr>
+                        {groups[dept]
+                          .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                          .map((s, index) => (
+                            <tr key={s.id}>
+                              <td>{index + 1}</td>
+                              <td style={{ color: 'var(--accent-cyan)', fontFamily: 'monospace', fontWeight: 'bold' }}>{s.registerNo || '-'}</td>
+                              <td>{s.name}</td>
+                              <td>{s.email}</td>
+                              <td>{s.department}</td>
+                              <td>{s.semester}</td>
+                              <td>
+                                <button onClick={() => handleEditStudent(s)} className="edit-btn">Edit</button>
+                              </td>
+                            </tr>
+                          ))}
+                      </React.Fragment>
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>
