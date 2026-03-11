@@ -2272,29 +2272,6 @@ const AdminHomePage = () => {
           <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '20px' }}>
             <h3>Debug Tools</h3>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={async () => {
-                  try {
-                    const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
-                    await set(timetablesRef, {
-                      subject: "Introduction to CS",
-                      teacherEmpId: "T-123",
-                      teacherName: "Test Teacher",
-                      room: "101",
-                      department: "Computer Science",
-                      semester: "Semester 1"
-                    });
-                    alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
-                  } catch (e) {
-                    alert("Error seeding timetable: " + e.message);
-                  }
-                }}
-                style={{ background: 'orange', color: 'white', padding: '10px' }}
-              >
-                Seed Timetable Data
-              </button>
-
               <button
                 onClick={async () => {
                   try {
@@ -2311,14 +2288,12 @@ const AdminHomePage = () => {
                     const snapshot = await rtdbGet(rtdbRef(rtdb, 'students'));
                     const students = snapshot.val() || {};
                     const exists = Object.values(students).some(s => s.email === "student@test.com" || s.rollNo === "S-101");
-                    const exists = Object.values(students).some(s => s.email === "student@test.com");
 
                     if (exists) {
                       alert("Test Student already exists in master list.");
                     } else {
                       await set(push(rtdbRef(rtdb, 'students')), studentData);
-                      alert("Seed Successful!\\n\\n1. Go to Login\\n2. Select 'Student' role\\n3. Click 'First Time Login'\\n4. Email: student@test.com\\n5. Roll Number: S-101\\n6. Set your own password!");
-                      alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Set your own password!");
+                      alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Roll Number: S-101\n6. Set your own password!");
                     }
                   } catch (e) {
                     alert("Error seeding student: " + e.message);
@@ -2349,10 +2324,6 @@ const AdminHomePage = () => {
                 style={{ background: 'orange', color: 'white', padding: '10px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
               >
                 Seed Timetable Data
-              </button>
-                style={{ background: '#28a745', color: 'white', padding: '10px' }}
-              >
-                Seed Test Student (S-101)
               </button>
             </div>
           </div>
@@ -2575,12 +2546,7 @@ const AdminHomePage = () => {
                     </div>
                   </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Phone Number</label>
-                    <input value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} placeholder="Contact Number" />
-                  </div>
-                </div>
+
                   {/* Identity Info */}
                   <div className="form-row cols-2">
                     <div className="form-group">
@@ -2631,8 +2597,7 @@ const AdminHomePage = () => {
               </div>
             )}
 
-            <div style={{ marginTop: 30 }}>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '12px', marginBottom: '25px', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '12px', marginBottom: '25px', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <h3 style={{ marginTop: 0, fontSize: '1.1rem', color: 'var(--accent-cyan)' }}>Register Number Generator</h3>
                 <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div className="form-group" style={{ margin: 0 }}>
@@ -2669,27 +2634,9 @@ const AdminHomePage = () => {
                 </p>
               </div>
 
-                <div className="form-buttons">
-                  <button type="submit">{editingStudentId ? "Update Student" : "Add Student"}</button>
-                  {editingStudentId && (
-                    <button type="button" onClick={() => {
-                      setEditingStudentId(null); setStudentName(""); setStudentEmail("");
-                      setStudentDivision("A"); setStudentDOB("");
-                      setStudentFatherName(""); setStudentMotherName("");
-                      setStudentReligion(""); setStudentCaste(""); setStudentPhone("");
-                      setStudentGuardianName(""); setStudentGuardianAddress("");
-                      setStudentTotalFees(0);
-                    }}>Cancel Edit</button>
-                  )}
-                  {editingStudentId && (
-                    <button type="button" onClick={handleDeleteStudent} style={{ marginLeft: '10px', background: '#dc3545', color: 'white' }}>Delete</button>
-                  )}
-                </div>
-              </form>
-            </div>
+
 
             <div style={{ marginTop: 30 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '15px' }}>
                 <h2>All Students</h2>
                 <div style={{ display: 'flex', gap: '15px' }}>
