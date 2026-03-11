@@ -73,7 +73,9 @@ const AdminHomePage = () => {
   const [teacherDept, setTeacherDept] = useState("Computer Science");
   const [teacherEmpId, setTeacherEmpId] = useState("");
   const [isTutor, setIsTutor] = useState(false);
-  const [tutorClass, setTutorClass] = useState("");
+  const [tutorClassDept, setTutorClassDept] = useState("Computer Science");
+  const [tutorClassSem, setTutorClassSem] = useState("Semester 1");
+  const [tutorClassDiv, setTutorClassDiv] = useState("A");
   const [isAdmissionDuty, setIsAdmissionDuty] = useState(false);
   const [admissionDutyStartDate, setAdmissionDutyStartDate] = useState("");
   const [admissionDutyEndDate, setAdmissionDutyEndDate] = useState("");
@@ -626,6 +628,13 @@ const AdminHomePage = () => {
         setStudentsList(Object.keys(data).map(key => ({ id: key, ...data[key] })).sort((a, b) => (a.department || "").localeCompare(b.department || "") || (a.name || "").localeCompare(b.name || "")));
       }
 
+      setStudentName(""); setStudentEmail("");
+      setStudentDivision("A"); setStudentDOB("");
+      setStudentFatherName(""); setStudentMotherName("");
+      setStudentReligion(""); setStudentCaste(""); setStudentPhone("");
+      setStudentGuardianName(""); setStudentGuardianAddress("");
+      setStudentTotalFees(0);
+      setEditingStudentId(null);
       setStudentName("");
       setStudentEmail("");
       setStudentDivision("A");
@@ -762,7 +771,9 @@ const AdminHomePage = () => {
         admissionDutyStartTime: isAdmissionDuty ? admissionDutyStartTime : "",
         admissionDutyEndTime: isAdmissionDuty ? admissionDutyEndTime : "",
         isTutor,
-        tutorClass: isTutor ? tutorClass : "",
+        tutorClassDept: isTutor ? tutorClassDept : "",
+        tutorClassSem: isTutor ? tutorClassSem : "",
+        tutorClassDiv: isTutor ? tutorClassDiv : "",
         updatedAt: Date.now()
       };
 
@@ -802,7 +813,9 @@ const AdminHomePage = () => {
               admissionDutyStartTime: isAdmissionDuty ? admissionDutyStartTime : "",
               admissionDutyEndTime: isAdmissionDuty ? admissionDutyEndTime : "",
               isTutor,
-              tutorClass: isTutor ? tutorClass : "",
+              tutorClassDept: isTutor ? tutorClassDept : "",
+              tutorClassSem: isTutor ? tutorClassSem : "",
+              tutorClassDiv: isTutor ? tutorClassDiv : "",
               department: teacherDept,
               employeeId: teacherEmpId,
               name: teacherName,
@@ -854,7 +867,9 @@ const AdminHomePage = () => {
             admissionDutyStartTime: isAdmissionDuty ? admissionDutyStartTime : "",
             admissionDutyEndTime: isAdmissionDuty ? admissionDutyEndTime : "",
             isTutor,
-            tutorClass: isTutor ? tutorClass : "",
+            tutorClassDept: isTutor ? tutorClassDept : "",
+            tutorClassSem: isTutor ? tutorClassSem : "",
+            tutorClassDiv: isTutor ? tutorClassDiv : "",
             createdAt: serverTimestamp()
           });
 
@@ -864,7 +879,9 @@ const AdminHomePage = () => {
             email: teacherEmail,
             role: "staff",
             isTutor,
-            tutorClass: isTutor ? tutorClass : "",
+            tutorClassDept: isTutor ? tutorClassDept : "",
+            tutorClassSem: isTutor ? tutorClassSem : "",
+            tutorClassDiv: isTutor ? tutorClassDiv : "",
             createdAt: Date.now()
           });
 
@@ -874,7 +891,9 @@ const AdminHomePage = () => {
             email: teacherEmail,
             role: "staff",
             isTutor,
-            tutorClass: isTutor ? tutorClass : "",
+            tutorClassDept: isTutor ? tutorClassDept : "",
+            tutorClassSem: isTutor ? tutorClassSem : "",
+            tutorClassDiv: isTutor ? tutorClassDiv : "",
             createdAt: Date.now()
           });
 
@@ -898,7 +917,9 @@ const AdminHomePage = () => {
       setTeacherEmail("");
       setTeacherEmpId("");
       setIsTutor(false);
-      setTutorClass("");
+      setTutorClassDept("Computer Science");
+      setTutorClassSem("Semester 1");
+      setTutorClassDiv("A");
       setIsAdmissionDuty(false);
       setAdmissionDutyStartDate("");
       setAdmissionDutyEndDate("");
@@ -931,7 +952,9 @@ const AdminHomePage = () => {
     setTeacherEmpId(teacher.employeeId);
     setTeacherDept(teacher.department);
     setIsTutor(teacher.isTutor || false);
-    setTutorClass(teacher.tutorClass || "");
+    setTutorClassDept(teacher.tutorClassDept || teacherDept);
+    setTutorClassSem(teacher.tutorClassSem || "Semester 1");
+    setTutorClassDiv(teacher.tutorClassDiv || "A");
     setIsAdmissionDuty(teacher.isAdmissionDuty || false);
     setAdmissionDutyStartDate(teacher.admissionDutyStartDate || "");
     setAdmissionDutyEndDate(teacher.admissionDutyEndDate || "");
@@ -1154,6 +1177,147 @@ const AdminHomePage = () => {
     }
   };
 
+  const handleBulkGenerate = async (type) => {
+    if (!selectedDept || selectedDept === 'All') {
+      alert("Please select a specific Department first.");
+      return;
+    }
+
+    const sems = type === 'odd' ? [1, 3, 5, 7] : [2, 4, 6, 8];
+    const semNames = sems.map(s => `Semester ${s}`);
+
+    if (!window.confirm(`Auto-generate timetable for ${selectedDept} - ${type.toUpperCase()} Semesters (${semNames.join(', ')})? This will overwrite existing data for these semesters.`)) {
+      return;
+    }
+
+    try {
+      console.log(`Fetching subjects for Dept: ${selectedDept}, Type: ${type}`);
+
+      const subjectsRef = rtdbRef(rtdb, 'subjects');
+      const subSnap = await rtdbGet(subjectsRef);
+
+      if (!subSnap.exists()) {
+        alert("No subjects found in the database. Add subjects first.");
+        return;
+      }
+
+      const allSubjects = subSnap.val();
+      const subjects = Object.keys(allSubjects)
+        .map(key => ({
+          id: key,
+          ...allSubjects[key],
+          credits: parseInt(allSubjects[key].credits || 3),
+          teachingHours: parseInt(allSubjects[key].teachingHours || allSubjects[key].credits || 3)
+        }))
+        .filter(s => s.department === selectedDept && semNames.includes(s.semester));
+
+      if (subjects.length === 0) {
+        alert(`No subjects found for ${selectedDept} - ${type} semesters.`);
+        return;
+      }
+
+      const teachersRef = rtdbRef(rtdb, 'teachers');
+      const teachSnap = await rtdbGet(teachersRef);
+      if (!teachSnap.exists()) {
+        alert("No teachers found. Add teachers first.");
+        return;
+      }
+      const allTeachersData = teachSnap.val();
+      const teachers = Object.keys(allTeachersData).map(key => ({ id: key, ...allTeachersData[key] }));
+
+      const prefsRef = rtdbRef(rtdb, 'preferences');
+      const prefSnap = await rtdbGet(prefsRef);
+      let preferences = [];
+      if (prefSnap.exists()) {
+        const pData = prefSnap.val();
+        preferences = Object.keys(pData).map(k => ({ id: k, ...pData[k] }));
+      }
+
+      const timetablesRef = rtdbRef(rtdb, 'timetables');
+      const ttSnap = await rtdbGet(timetablesRef);
+      const existingTimetables = ttSnap.exists() ? ttSnap.val() : {};
+
+      // Prepare division objects
+      const divisionsPerSem = {};
+      semNames.forEach(sem => {
+        const count = divisionSettings[selectedDept]?.[sem] || 1;
+        divisionsPerSem[sem] = Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
+      });
+
+      const generator = new TimetableGenerator(subjects, teachers, preferences, existingTimetables);
+      const methodResult = generator.generate(divisionsPerSem);
+
+      const generatedDeptSchedule = methodResult[selectedDept];
+
+      if (!generatedDeptSchedule) {
+        alert("Generation failed. Please check console for details.");
+        return;
+      }
+
+      let totalSlots = 0;
+      let scheduledSems = [];
+
+      // Save to DB per semester
+      for (const sem of semNames) {
+        if (generatedDeptSchedule[sem]) {
+          const timetableRef = rtdbRef(rtdb, `timetables/${selectedDept}/${sem}`);
+          await set(timetableRef, generatedDeptSchedule[sem]);
+
+          // Count slots
+          Object.keys(generatedDeptSchedule[sem]).forEach(div => {
+            if (generatedDeptSchedule[sem][div]) {
+              Object.keys(generatedDeptSchedule[sem][div]).forEach(day => {
+                totalSlots += Object.keys(generatedDeptSchedule[sem][div][day]).length;
+              });
+            }
+          });
+          scheduledSems.push(sem);
+        }
+      }
+
+      if (totalSlots === 0) {
+        const debugMsg = generator.debugInfo ? generator.debugInfo.join('\n') : "No debug info";
+        prompt("Generation Failed. Please COPY these reasons and paste them to the chat:", debugMsg);
+        return;
+      }
+
+      alert(`Timetables generated successfully for ${scheduledSems.join(', ')}! (${totalSlots} slots created)`);
+
+      // Refresh view if the current selected semester is in the generated ones
+      if (scheduledSems.includes(selectedSemester)) {
+        const currentDivData = generatedDeptSchedule[selectedSemester][selectedDivision || 'A'];
+        setTimetableData(currentDivData || {});
+      }
+
+    } catch (err) {
+      console.error("Bulk auto-generation error:", err);
+      alert("Error during bulk generation: " + err.message);
+    }
+  };
+
+  const handleClearTimetable = async () => {
+    if (!selectedDept || selectedDept === 'All' || !selectedSemester) {
+      alert("Please select a specific Department and Semester first.");
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to completely CLEAR the timetable for ${selectedDept} - ${selectedSemester}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const timetableRef = rtdbRef(rtdb, `timetables/${selectedDept}/${selectedSemester}`);
+      await set(timetableRef, null);
+
+      setTimetableData({});
+      alert("Timetable cleared successfully.");
+    } catch (err) {
+      console.error("Clear timetable error:", err);
+      alert("Error clearing timetable: " + err.message);
+    }
+  };
+
+
   const handleEditSubject = (subject) => {
     setEditingSubjectId(subject.id);
     setSubjectName(subject.name);
@@ -1274,7 +1438,9 @@ const AdminHomePage = () => {
       setTeacherEmpId("");
       setTeacherDept("Computer Science"); // Reset to default if needed, or keep existing
       setIsTutor(false);
-      setTutorClass("");
+      setTutorClassDept("Computer Science");
+      setTutorClassSem("Semester 1");
+      setTutorClassDiv("A");
       setIsAdmissionDuty(false);
 
       const teachersRef = rtdbRef(rtdb, 'teachers');
@@ -1546,13 +1712,36 @@ const AdminHomePage = () => {
                       </select>
                     </div>
                   )}
-                  <button
-                    onClick={handleAutoGenerate}
-                    className="save-btn"
-                    style={{ marginLeft: 'auto', background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)' }}
-                  >
-                    Auto-Generate
-                  </button>
+                  <div style={{ display: 'flex', gap: '12px', marginLeft: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', paddingLeft: '20px' }}>
+                    <button
+                      onClick={handleAutoGenerate}
+                      className="save-btn"
+                      style={{ background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', fontSize: '0.85rem' }}
+                    >
+                      <Calendar size={16} /> Gen Current
+                    </button>
+                    <button
+                      onClick={() => handleBulkGenerate('odd')}
+                      className="save-btn"
+                      style={{ background: 'linear-gradient(90deg, #6366f1 0%, #4f46e5 100%)', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', fontSize: '0.85rem' }}
+                    >
+                      <LayoutDashboard size={16} /> Gen Odd Sems
+                    </button>
+                    <button
+                      onClick={() => handleBulkGenerate('even')}
+                      className="save-btn"
+                      style={{ background: 'linear-gradient(90deg, #8b5cf6 0%, #7c3aed 100%)', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', fontSize: '0.85rem' }}
+                    >
+                      <LayoutDashboard size={16} /> Gen Even Sems
+                    </button>
+                    <button
+                      onClick={handleClearTimetable}
+                      className="save-btn"
+                      style={{ background: 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', fontSize: '0.85rem' }}
+                    >
+                      <Clock size={16} /> Clear
+                    </button>
+                  </div>
                 </>
               ) : activeMenu === 'teacher-timetable' ? (
                 <div className="selector">
@@ -1906,13 +2095,25 @@ const AdminHomePage = () => {
                     />
                   </div>
                   {isTutor && (
-                    <div className="form-group">
-                      <label>Class to Tutor</label>
-                      <input
-                        value={tutorClass}
-                        onChange={(e) => setTutorClass(e.target.value)}
-                        placeholder="e.g. Class 10A"
-                      />
+                    <div className="form-row" style={{ marginTop: '15px' }}>
+                      <div className="form-group">
+                        <label>Tutor Department</label>
+                        <select value={tutorClassDept} onChange={(e) => setTutorClassDept(e.target.value)}>
+                          {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Tutor Semester</label>
+                        <select value={tutorClassSem} onChange={(e) => setTutorClassSem(e.target.value)}>
+                          {Array.from({ length: 8 }, (_, i) => `Semester ${i + 1}`).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Tutor Division</label>
+                        <select value={tutorClassDiv} onChange={(e) => setTutorClassDiv(e.target.value)}>
+                          {['A', 'B', 'C', 'D'].map(d => <option key={d} value={d}>Section {d}</option>)}
+                        </select>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1970,7 +2171,9 @@ const AdminHomePage = () => {
                       setTeacherEmpId("");
 
                       setIsTutor(false);
-                      setTutorClass("");
+                      setTutorClassDept("Computer Science");
+                      setTutorClassSem("Semester 1");
+                      setTutorClassDiv("A");
                       setIsAdmissionDuty(false);
                       setAdmissionDutyStartDate("");
                       setAdmissionDutyEndDate("");
@@ -2000,7 +2203,7 @@ const AdminHomePage = () => {
                         <td>{t.email}</td>
                         <td>{t.department}</td>
                         <td>{t.isTutor ? "Yes" : "No"}</td>
-                        <td>{t.tutorClass || "-"}</td>
+                        <td>{t.isTutor ? `${t.tutorClassDept} - ${t.tutorClassSem} (${tutorClassDiv})` : "-"}</td>
                         <td>{t.isAdmissionDuty ? "Yes" : "No"}</td>
                         <td>
                           <button onClick={() => handleEditTeacher(t)} className="edit-btn" style={{ marginRight: '10px' }}>Edit</button>
@@ -2068,6 +2271,7 @@ const AdminHomePage = () => {
         {activeMenu === 'overview' && (
           <div style={{ marginTop: '20px', borderTop: '1px solid #ccc', paddingTop: '20px' }}>
             <h3>Debug Tools</h3>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 onClick={async () => {
@@ -2097,6 +2301,7 @@ const AdminHomePage = () => {
                     const studentData = {
                       name: "Test Student",
                       email: "student@test.com",
+                      rollNo: "S-101",
                       department: "Computer Science",
                       semester: "1",
                       totalFees: 50000,
@@ -2105,18 +2310,46 @@ const AdminHomePage = () => {
 
                     const snapshot = await rtdbGet(rtdbRef(rtdb, 'students'));
                     const students = snapshot.val() || {};
+                    const exists = Object.values(students).some(s => s.email === "student@test.com" || s.rollNo === "S-101");
                     const exists = Object.values(students).some(s => s.email === "student@test.com");
 
                     if (exists) {
                       alert("Test Student already exists in master list.");
                     } else {
                       await set(push(rtdbRef(rtdb, 'students')), studentData);
+                      alert("Seed Successful!\\n\\n1. Go to Login\\n2. Select 'Student' role\\n3. Click 'First Time Login'\\n4. Email: student@test.com\\n5. Roll Number: S-101\\n6. Set your own password!");
                       alert("Seed Successful!\n\n1. Go to Login\n2. Select 'Student' role\n3. Click 'First Time Login'\n4. Email: student@test.com\n5. Set your own password!");
                     }
                   } catch (e) {
                     alert("Error seeding student: " + e.message);
                   }
                 }}
+                style={{ background: '#28a745', color: 'white', padding: '10px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
+              >
+                Seed Test Student (S-101)
+              </button>
+
+              <button
+                onClick={async () => {
+                  try {
+                    const timetablesRef = rtdbRef(rtdb, 'timetables/Computer Science/Semester 1/Monday/9AM');
+                    await set(timetablesRef, {
+                      subject: "Introduction to CS",
+                      teacherEmpId: "T-123",
+                      teacherName: "Test Teacher",
+                      room: "101",
+                      department: "Computer Science",
+                      semester: "Semester 1"
+                    });
+                    alert("Seeded Timetable Data! Login as Teacher T-123 to see it.");
+                  } catch (e) {
+                    alert("Error seeding: " + e.message);
+                  }
+                }}
+                style={{ background: 'orange', color: 'white', padding: '10px', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
+              >
+                Seed Timetable Data
+              </button>
                 style={{ background: '#28a745', color: 'white', padding: '10px' }}
               >
                 Seed Test Student (S-101)
@@ -2342,6 +2575,12 @@ const AdminHomePage = () => {
                     </div>
                   </div>
 
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Phone Number</label>
+                    <input value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} placeholder="Contact Number" />
+                  </div>
+                </div>
                   {/* Identity Info */}
                   <div className="form-row cols-2">
                     <div className="form-group">
@@ -2430,6 +2669,27 @@ const AdminHomePage = () => {
                 </p>
               </div>
 
+                <div className="form-buttons">
+                  <button type="submit">{editingStudentId ? "Update Student" : "Add Student"}</button>
+                  {editingStudentId && (
+                    <button type="button" onClick={() => {
+                      setEditingStudentId(null); setStudentName(""); setStudentEmail("");
+                      setStudentDivision("A"); setStudentDOB("");
+                      setStudentFatherName(""); setStudentMotherName("");
+                      setStudentReligion(""); setStudentCaste(""); setStudentPhone("");
+                      setStudentGuardianName(""); setStudentGuardianAddress("");
+                      setStudentTotalFees(0);
+                    }}>Cancel Edit</button>
+                  )}
+                  {editingStudentId && (
+                    <button type="button" onClick={handleDeleteStudent} style={{ marginLeft: '10px', background: '#dc3545', color: 'white' }}>Delete</button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div style={{ marginTop: 30 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '15px' }}>
                 <h2>All Students</h2>
                 <div style={{ display: 'flex', gap: '15px' }}>
