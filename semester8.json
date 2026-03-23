@@ -1,0 +1,44 @@
+{
+  "CST402": {
+    "subjectName": "DISTRIBUTED COMPUTING",
+    "subjectCode": "CST 402",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST---_III": {
+    "subjectName": "PROGRAM ELECTIVE III",
+    "subjectCode": "CST ---",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST---_IV": {
+    "subjectName": "PROGRAM ELECTIVE IV",
+    "subjectCode": "CST ---",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST---_V": {
+    "subjectName": "PROGRAM ELECTIVE V",
+    "subjectCode": "CST ---",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST404": {
+    "subjectName": "COMPREHENSIVE COURSE VIVA",
+    "subjectCode": "CST 404",
+    "credit": "1",
+    "hours": "1"
+  },
+  "CSD416": {
+    "subjectName": "PROJECT PHASE II",
+    "subjectCode": "CSD 416",
+    "credit": "4",
+    "hours": "12"
+  },
+  "VAC": {
+    "subjectName": "Remedial/Minor/Honors course",
+    "subjectCode": "VAC",
+    "credit": "4",
+    "hours": "4"
+  }
+}

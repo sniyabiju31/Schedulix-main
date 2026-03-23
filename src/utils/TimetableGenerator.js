@@ -14,79 +14,54 @@ export class TimetableGenerator {
         this.preferences = preferences; // Array of teacher preferences
         this.existingTimetables = existingTimetables; // structure: { Dept: { Sem: { Div: { Day: { Hour: Slot } } } } }
 
-        // Result: { Department: { Semester: { Day: { Hour: Slot } } } }
         this.timetables = {};
-
-        // Helper to track teacher availability: { TeacherID: { Day: { Hour: true/false } } }
         this.teacherAvailability = {};
-
-        this.debugInfo = []; // Store failure reasons
-        this.steps = 0; // Operation counter
-        this.MAX_STEPS = 50000; // Safety limit
+        this.teacherWorkLoad = {};
+        this.debugInfo = [];
+        this.steps = 0;
+        this.MAX_STEPS = 50000;
     }
 
     log(msg) {
-        if (this.debugInfo.length < 20) this.debugInfo.push(msg); // Limit logs
+        if (this.debugInfo.length < 20) this.debugInfo.push(msg);
     }
 
     generate(divisions = ['A']) {
         this.initialize();
-        // ... rest of generate
-
-        // Expand subjects for each division
         const expandedSubjects = [];
         this.subjects.forEach(sub => {
             let divArray = divisions;
-            // Support passing an object mapping semester to its divisions array
             if (!Array.isArray(divisions) && typeof divisions === 'object') {
                 divArray = divisions[sub.semester] || ['A'];
             } else if (!Array.isArray(divisions)) {
                 divArray = ['A'];
             }
-
             divArray.forEach(div => {
                 expandedSubjects.push({ ...sub, division: div });
             });
         });
 
-        // Group subjects by Class (Dept + Sem + Div)
         const classes = this.groupSubjectsByClass(expandedSubjects);
-        console.log("Generator - Classes to schedule:", Object.keys(classes));
-
-        // Sort class keys based on semester:
-        // Period 1 (active first): Semesters 1, 3, 5, 7 (odd)
-        // Period 2 (active after): Semesters 2, 4, 6, 8 (even)
         const classKeys = Object.keys(classes).sort((a, b) => {
-            // Extract the semester number from keys (e.g., "Computer Science-Semester 6-A" or "CS-6-A")
             const semA = parseInt(a.split('-')[1].replace(/\D/g, '')) || 0;
             const semB = parseInt(b.split('-')[1].replace(/\D/g, '')) || 0;
-
             const isOddA = semA % 2 !== 0;
             const isOddB = semB % 2 !== 0;
-
-            if (isOddA && !isOddB) return -1; // a comes first
-            if (!isOddA && isOddB) return 1;  // b comes first
-
-            return 0; // If both odd or both even, maintain relative order
+            if (isOddA && !isOddB) return -1;
+            if (!isOddA && isOddB) return 1;
+            return 0;
         });
 
-        // Process each class sequentially based on new sorting
         for (const classKey of classKeys) {
             const classSubjects = classes[classKey];
             const sample = classSubjects[0];
-            const dept = sample.department;
-            const sem = sample.semester;
-            const div = sample.division;
+            const { department: dept, semester: sem, division: div } = sample;
 
-            // Initialize class grid
             if (!this.timetables[dept]) this.timetables[dept] = {};
             if (!this.timetables[dept][sem]) this.timetables[dept][sem] = {};
             if (!this.timetables[dept][sem][div]) this.timetables[dept][sem][div] = {};
 
-            // Sort subjects: Labs first (Hard constraint), then Randomized Theory
-            // First, shuffle the list to ensure Theory subjects are in random order before sorting
             classSubjects.sort(() => Math.random() - 0.5);
-
             classSubjects.sort((a, b) => {
                 const aIsLab = a.type === 'Lab' || a.credits > 3 || (a.teachingHours && a.teachingHours > 1);
                 const bIsLab = b.type === 'Lab' || b.credits > 3 || (b.teachingHours && b.teachingHours > 1);
@@ -95,46 +70,33 @@ export class TimetableGenerator {
                 return 0;
             });
 
-            // Attempt to schedule
-            const success = this.scheduleClass(dept, sem, div, classSubjects);
-            if (!success) {
-                console.warn(`Could not fully schedule for ${dept} - ${sem} - ${div}`);
-            }
+            this.scheduleClass(dept, sem, div, classSubjects);
         }
-        console.log("Generator - Success!", this.timetables);
         return this.timetables;
     }
 
     initialize() {
         this.timetables = {};
-
         this.teacherAvailability = {};
         this.teacherWorkLoad = {};
 
-        // 1. Initialize all teachers as Free
         this.teachers.forEach(t => {
             const tid = t.id || t.employeeId;
             this.teacherAvailability[tid] = {};
-            this.teacherWorkLoad[tid] = { total: 0, daily: {} }; // Track Hours
+            this.teacherWorkLoad[tid] = { total: 0, daily: {} };
             DAYS.forEach(d => {
                 this.teacherAvailability[tid][d] = {};
                 this.teacherWorkLoad[tid].daily[d] = 0;
                 HOURS.forEach(h => {
-                    this.teacherAvailability[tid][d][h] = true; // Free
+                    this.teacherAvailability[tid][d][h] = true;
                 });
             });
         });
 
-        // 2. Mark Busy based on Existing Timetables
         if (this.existingTimetables) {
             Object.values(this.existingTimetables).forEach(deptObj => {
                 Object.values(deptObj).forEach(semObj => {
                     Object.values(semObj).forEach(divObj => {
-                        // Some structure might not have div layer if legacy, handle carefully
-                        // If structure is timetables/Dept/Sem/Day/Hour (legacy) vs timetables/Dept/Sem/Div/Day/Hour
-                        // The prompt implies we are moving to Divs. 
-                        // Let's assume if it has Day keys, it's a schedule, else iterate deeper.
-
                         const processSchedule = (schedule) => {
                             if (!schedule) return;
                             Object.keys(schedule).forEach(day => {
@@ -142,36 +104,38 @@ export class TimetableGenerator {
                                     const daySlots = schedule[day];
                                     Object.keys(daySlots).forEach(hour => {
                                         const slot = daySlots[hour];
-                                        if (slot && slot.teacherId && this.teacherAvailability[slot.teacherId]) {
-                                            // Mark Busy
-                                            if (this.teacherAvailability[slot.teacherId][day]) {
-                                                this.teacherAvailability[slot.teacherId][day][hour] = false;
-
-                                                // Update Load Tracking
-                                                if (this.teacherWorkLoad[slot.teacherId]) {
-                                                    this.teacherWorkLoad[slot.teacherId].total++;
-                                                    this.teacherWorkLoad[slot.teacherId].daily[day]++;
-                                                }
+                                        if (slot) {
+                                            if (slot.isParallel && slot.parallelSlots) {
+                                                slot.parallelSlots.forEach(ps => this.markBusy(ps.teacherId, day, hour));
+                                            } else if (slot.multiTeachers) {
+                                                slot.multiTeachers.forEach(t => this.markBusy(t.teacherId, day, hour));
+                                            } else if (slot.teacherId) {
+                                                this.markBusy(slot.teacherId, day, hour);
                                             }
                                         }
                                     });
                                 }
                             });
                         };
-
-                        // Robust check: Is this node a Schedule (has Monday/Tuesday)? or a Map of Divs?
                         const keys = Object.keys(divObj || {});
-                        const isSchedule = keys.some(k => DAYS.includes(k));
-
-                        if (isSchedule) {
+                        if (keys.some(k => DAYS.includes(k))) {
                             processSchedule(divObj);
                         } else {
-                            // Iterate Divisions
-                            Object.values(divObj).forEach(innerSched => processSchedule(innerSched));
+                            Object.values(divObj).forEach(inner => processSchedule(inner));
                         }
                     });
                 });
             });
+        }
+    }
+
+    markBusy(tid, day, hour) {
+        if (tid && this.teacherAvailability[tid]) {
+            this.teacherAvailability[tid][day][hour] = false;
+            if (this.teacherWorkLoad[tid]) {
+                this.teacherWorkLoad[tid].total++;
+                this.teacherWorkLoad[tid].daily[day]++;
+            }
         }
     }
 
@@ -186,326 +150,224 @@ export class TimetableGenerator {
     }
 
     scheduleClass(dept, sem, div, subjects) {
-        this.steps = 0; // Reset counter for this class
+        this.steps = 0;
         const slotsToFill = [];
+        const electiveGroups = {};
+        const standaloneSubjects = [];
 
         subjects.forEach(sub => {
-            // Default to 4 hours/week if not specified (standard)
+            if (sub.category && sub.category.startsWith("Elective")) {
+                if (!electiveGroups[sub.category]) electiveGroups[sub.category] = [];
+                electiveGroups[sub.category].push(sub);
+            } else {
+                standaloneSubjects.push(sub);
+            }
+        });
+
+        standaloneSubjects.forEach(sub => {
             const hoursNeeded = parseInt(sub.teachingHours || sub.credits || 4);
-
-            // Only treat as Lab block if explicitly marked or named Lab
             const isLab = sub.type === 'Lab' || (sub.name && sub.name.toLowerCase().includes('lab'));
-
             if (isLab) {
-                // Labs are single blocks of 3 hours (or teachingHours if specified/valid)
-                // Assuming standard lab is 3 hours
-                slotsToFill.push({
-                    subject: sub,
-                    duration: 3,
-                    type: 'Lab'
-                });
+                slotsToFill.push({ subject: sub, duration: 3, type: 'Lab', requiredTeachers: sub.requiredTeachers || 1 });
             } else {
                 for (let i = 0; i < hoursNeeded; i++) {
-                    slotsToFill.push({
-                        subject: sub,
-                        duration: 1,
-                        type: 'Theory'
-                    });
+                    slotsToFill.push({ subject: sub, duration: 1, type: 'Theory', requiredTeachers: sub.requiredTeachers || 1 });
                 }
             }
         });
 
-        console.log(`Generator - Scheduling ${dept} ${sem} ${div}. Slots: ${slotsToFill.length}`);
+        Object.keys(electiveGroups).forEach(groupName => {
+            const groupSubjs = electiveGroups[groupName];
+            const hoursNeeded = parseInt(groupSubjs[0].teachingHours || groupSubjs[0].credits || 3);
+            for (let i = 0; i < hoursNeeded; i++) {
+                slotsToFill.push({ isParallel: true, groupName, subjects: groupSubjs, duration: 1, type: 'Elective' });
+            }
+        });
+
         return this.backtrack(dept, sem, div, slotsToFill, 0);
     }
 
     backtrack(dept, sem, div, slots, index) {
         this.steps++;
-        if (this.steps > this.MAX_STEPS) {
-            console.warn(`Backtrack Hit Max Steps (${this.MAX_STEPS}) for ${dept} ${sem} ${div}`);
-            this.log("Hit Max Steps - Stopping recursion");
+        if (this.steps > this.MAX_STEPS || index >= slots.length) return index >= slots.length;
+
+        const currentSlotRequest = slots[index];
+        const { duration, isParallel, subjects, groupName } = currentSlotRequest;
+
+        if (isParallel) {
+            const sortedDays = [...DAYS].sort((a, b) => Math.random() - 0.5);
+            for (let day of sortedDays) {
+                const currentGridDay = this.timetables[dept][sem][div][day] || {};
+                if (Object.values(currentGridDay).some(s => s.groupName === groupName)) continue;
+
+                let hourIndices = Array.from({ length: HOURS.length }, (_, i) => i).sort(() => Math.random() - 0.5);
+                for (let h of hourIndices) {
+                    const hourLabel = HOURS[h];
+                    if (currentGridDay[hourLabel]) continue;
+
+                    const resolvedAssignments = [];
+                    let allResolved = true;
+
+                    for (const sub of subjects) {
+                        let existingTid = null;
+                        Object.values(this.timetables[dept][sem][div] || {}).forEach(dObj => {
+                            Object.values(dObj).forEach(s => { if (s.subject === sub.name && s.teacherId) existingTid = s.teacherId; });
+                        });
+
+                        const eligibleTeachers = this.teachers.filter(t => existingTid ? t.id === existingTid : t.department === dept);
+                        const candidates = eligibleTeachers.map(t => {
+                            const isBusy = !this.teacherAvailability[t.id][day][hourLabel];
+                            const loadBusy = this.teacherWorkLoad[t.id].total >= 24;
+                            let score = 0;
+                            const pref = this.preferences.find(p => p.email === t.email);
+                            if (pref && (pref.subjectPref1 === sub.name || pref.subjectPref2 === sub.name)) score += 100;
+                            return { teacher: t, score: isBusy || loadBusy ? -1 : score };
+                        }).filter(c => c.score >= 0).sort((a, b) => b.score - a.score);
+
+                        if (candidates.length > 0) {
+                            resolvedAssignments.push({ subject: sub, teacher: candidates[0].teacher });
+                        } else {
+                            allResolved = false;
+                            break;
+                        }
+                    }
+
+                    if (allResolved) {
+                        const parallelSlot = {
+                            subject: groupName, groupName, isParallel: true, type: 'Elective', department: dept, semester: sem, division: div,
+                            parallelSlots: resolvedAssignments.map(asm => ({
+                                subject: asm.subject.name, code: asm.subject.code, teacherName: asm.teacher.name, teacherId: asm.teacher.id,
+                                teacherEmpId: asm.teacher.employeeId, room: `Room ${sem.replace(/\D/g, '')}-${div}-${asm.subject.code}`
+                            }))
+                        };
+                        if (!this.timetables[dept][sem][div][day]) this.timetables[dept][sem][div][day] = {};
+                        this.timetables[dept][sem][div][day][hourLabel] = parallelSlot;
+                        resolvedAssignments.forEach(asm => {
+                            this.teacherAvailability[asm.teacher.id][day][hourLabel] = false;
+                            this.teacherWorkLoad[asm.teacher.id].total++;
+                            this.teacherWorkLoad[asm.teacher.id].daily[day]++;
+                        });
+                        if (this.backtrack(dept, sem, div, slots, index + 1)) return true;
+                        delete this.timetables[dept][sem][div][day][hourLabel];
+                        resolvedAssignments.forEach(asm => {
+                            this.teacherAvailability[asm.teacher.id][day][hourLabel] = true;
+                            this.teacherWorkLoad[asm.teacher.id].total--;
+                            this.teacherWorkLoad[asm.teacher.id].daily[day]--;
+                        });
+                    }
+                }
+            }
             return false;
         }
 
-        if (index >= slots.length) return true; // All slots filled!
-
-        // Limit labs per day
-        const totalLabs = slots.filter(s => s.type === 'Lab' || s.duration === 3).length;
-        const maxLabsPerDay = totalLabs > 5 ? 2 : 1;
-
-        const currentSlotRequest = slots[index];
-        const { subject, duration } = currentSlotRequest;
-
-        // 1. Find Preferred Teachers & Load Balance
-        let candidates = [];
-        const deptTeachers = this.teachers.filter(t => t.department === dept);
-
-        deptTeachers.forEach(teacher => {
-            let score = 0;
+        const { subject } = currentSlotRequest;
+        let candidates = this.teachers.filter(t => t.department === dept).map(teacher => {
             const tid = teacher.id;
-
-            // --- WORKLOAD CONSTRAINTS (Selection Phase) ---
             const workLoad = this.teacherWorkLoad[tid];
-            if (!workLoad) return; // Should not happen
+            if (!workLoad || workLoad.total >= 24) return null;
 
-            // Hard Limit: Max 24 hours/week
-            if (workLoad.total >= 24) {
-                // Skip teacher if already at max capacity
-                // We exclude them from 'candidates' entirely
-                return;
+            let score = 0;
+            const isAlreadyTeachingThis = Object.values(this.timetables[dept][sem][div] || {}).some(dObj => Object.values(dObj).some(s => s.teacherId === tid && s.subject === subject.name));
+            if (isAlreadyTeachingThis) score += 500;
+            
+            const pref = this.preferences.find(p => p.email === teacher.email || p.id === tid);
+            if (pref) {
+                if (pref.subjectPref1 === subject.name) score += 100;
+                else if (pref.subjectPref2 === subject.name) score += 50;
             }
+            score += (18 - workLoad.total) * 2;
+            return { teacher, score };
+        }).filter(c => c !== null).sort((a, b) => b.score - a.score);
 
-            const pref = this.preferences.find(p => p.email === teacher.email);
-            const teacherPref = this.preferences.find(p => p.id === teacher.id);
-            const pObj = teacherPref || pref;
-
-            if (pObj) {
-                const subjects = [pObj.subjectPref1, pObj.subjectPref2, pObj.subjectPref3];
-                const classes = [pObj.classPref1, pObj.classPref2, pObj.classPref3];
-                const subIndex = subjects.findIndex(s => s === subject.name);
-
-                if (subIndex === 0) score += 100;
-                else if (subIndex === 1) score += 50;
-                else if (subIndex === 2) score += 25;
-
-                if (subIndex !== -1) {
-                    if (classes[subIndex] && classes[subIndex].endsWith(` ${div}`)) {
-                        score += 20;
-                    }
-                }
-            }
-
-            // Consistency Bonus: If this teacher is ALREADY teaching this subject to this class, HUGE bonus.
-            const isAlreadyTeachingThis = Object.values(this.timetables[dept][sem][div] || {}).some(dayObj => {
-                return Object.values(dayObj).some(s => s.teacherId === teacher.id && s.subject === subject.name);
-            });
-
-            if (isAlreadyTeachingThis) {
-                score += 500;
-            }
-
-            // Load Balancing & Target Constraints (18-24 hours)
-            if (!isAlreadyTeachingThis) {
-                const currentLoad = workLoad.total;
-
-                // Prioritize teachers who are BELOW the minimum (18)
-                if (currentLoad < 18) {
-                    score += (18 - currentLoad) * 5; // Boost
-                } else {
-                    // Slight penalty as they get fuller, to distribute to others
-                    score -= (currentLoad - 18) * 5;
-                }
-            }
-
-            candidates.push({ teacher, score });
-        });
-
-        candidates.sort((a, b) => b.score - a.score);
         let possibleTeachers = candidates.map(c => c.teacher);
-
-        // 2. Fallback: If preferences exist, 'possibleTeachers' only has them.
-        // We MUST append the rest of the dept teachers to avoid failure if preferred ones are busy.
-        const preferredIDs = new Set(possibleTeachers.map(t => t.id));
-        const otherDeptTeachers = this.teachers.filter(t => t.department === dept && !preferredIDs.has(t.id));
-
-        // Shuffle others to distribute load randomly
-        otherDeptTeachers.sort(() => Math.random() - 0.5);
-
-        // Combine: Preferred First -> Then Others
-        possibleTeachers = [...possibleTeachers, ...otherDeptTeachers];
-
-        // NEW CONSTRAINT: A single teacher can only take a single subject in a class
-        // Filter out teachers who are already teaching a DIFFERENT subject in this class
-        possibleTeachers = possibleTeachers.filter(t => {
-            if (!t) return true;
-            const isTeachingAnotherSubject = Object.values(this.timetables[dept][sem][div] || {}).some(dayObj => {
-                return Object.values(dayObj).some(s => s.teacherId === t.id && s.subject !== subject.name);
-            });
-            return !isTeachingAnotherSubject;
-        });
-
-        // NEW CONSTRAINT: A single subject in a class must be taught by a single teacher
-        // If this subject is already being taught by someone in this class, ONLY that teacher can be selected
-        let existingTeacherIdForSubject = null;
-        let subjectAlreadyAssigned = false;
-
-        Object.values(this.timetables[dept][sem][div] || {}).forEach(dayObj => {
-            Object.values(dayObj).forEach(s => {
-                if (s.subject === subject.name) {
-                    subjectAlreadyAssigned = true;
-                    if (s.teacherId) {
-                        existingTeacherIdForSubject = s.teacherId;
-                    }
-                }
-            });
-        });
-
-        if (existingTeacherIdForSubject) {
-            // Strictly reduce possibleTeachers to just this teacher
-            possibleTeachers = possibleTeachers.filter(t => t && t.id === existingTeacherIdForSubject);
-        } else if (subjectAlreadyAssigned) {
-            // If subject was assigned but with NO teacher (Unassigned), must remain Unassigned
-            possibleTeachers = [null];
-        }
-
-        if (possibleTeachers.length === 0 && !existingTeacherIdForSubject) {
-            console.warn(`No teacher found for ${subject.name} in ${dept}. Using 'Unassigned'.`);
-            possibleTeachers = [null];
-        }
-
-        // Helper to count occurrences of this subject on a specific day
-        const getDailySubjectCount = (d) => {
-            if (!this.timetables[dept][sem][div][d]) return 0;
-            return Object.values(this.timetables[dept][sem][div][d])
-                .filter(slot => slot.subject === subject.name)
-                .length;
-        };
+        let existingTid = null;
+        Object.values(this.timetables[dept][sem][div] || {}).forEach(dObj => Object.values(dObj).forEach(s => { if (s.subject === subject.name && s.teacherId) existingTid = s.teacherId; }));
+        if (existingTid) possibleTeachers = possibleTeachers.filter(t => t.id === existingTid);
+        if (possibleTeachers.length === 0) possibleTeachers = [null];
 
         const sortedDays = [...DAYS].sort((a, b) => {
-            return getDailySubjectCount(a) - getDailySubjectCount(b);
+            const count = (d) => Object.values(this.timetables[dept][sem][div][d] || {}).filter(s => s.subject === subject.name).length;
+            return count(a) - count(b);
         });
 
-        // Try Timeslots
-        for (let d = 0; d < sortedDays.length; d++) {
-            const day = sortedDays[d];
+        for (let day of sortedDays) {
+            if (currentSlotRequest.type === 'Theory' && Object.values(this.timetables[dept][sem][div][day] || {}).some(s => s.subject === subject.name)) continue;
 
-            // Hard Constraint: Max 1 period per day for Theory
-            if (currentSlotRequest.type === 'Theory') {
-                if (getDailySubjectCount(day) >= 1) {
-                    this.log(`Rejected ${subject.name} on ${day}: Max 1 theory/day`);
-                    continue;
-                }
-            }
-
-            // Hard Constraint: Max Lab limit per Day
-            if (currentSlotRequest.type === 'Lab' || duration === 3) {
-                const daySlots = this.timetables[dept][sem][div][day] || {};
-                const dailyLabCount = Object.values(daySlots).filter(s => s.type === 'Lab' || (s.subject && s.subject.includes('Lab'))).length;
-
-                if (dailyLabCount >= maxLabsPerDay) {
-                    this.log(`Rejected ${subject.name} on ${day}: Max ${maxLabsPerDay} Lab limit reached`);
-                    continue;
-                }
-            }
-
-            // Define hour order: Shuffle for Theory to avoid deterministically picking 1st slot
             let hourIndices = Array.from({ length: HOURS.length }, (_, i) => i);
-            if (currentSlotRequest.type === 'Theory') {
-                hourIndices.sort(() => Math.random() - 0.5);
-            }
+            if (currentSlotRequest.type === 'Theory') hourIndices.sort(() => Math.random() - 0.5);
 
             for (let h of hourIndices) {
-                // --- CONSTRAINT CHECKING ---
+                if (duration === 3 && (h !== 0 && h !== 1 && h !== 4)) continue;
+                if (h + duration > HOURS.length) continue;
 
-                // 1. Lab Constraints
-                if (duration === 3) {
-                    if (h !== 0 && h !== 1 && h !== 4) continue;
-                    if (h + duration > HOURS.length) continue;
-                }
-
-                // 2. Theory Constraints
-                if (currentSlotRequest.type === 'Theory') {
-                    const currentGridDay = this.timetables[dept][sem][div][day] || {};
-                    const prevSlot = currentGridDay[HOURS[h - 1]];
-                    if (prevSlot && prevSlot.subject === subject.name && prevSlot.type === 'Theory') continue;
-                    const nextSlot = currentGridDay[HOURS[h + 1]];
-                    if (nextSlot && nextSlot.subject === subject.name && nextSlot.type === 'Theory') continue;
-                }
-
-                // Try ALL Possible Teachers for this slot
-                for (const teacher of possibleTeachers) {
-                    // Allow 'null' teacher (Unassigned) to proceed, but skip workload checks for them
-
-                    if (teacher) {
-                        // --- CONSTRAINT CHECKING (Assignment Phase) ---
-                        const tid = teacher.id;
-                        const workLoad = this.teacherWorkLoad[tid];
-
-                        // 1. Weekly Constraint (Check again just in case)
-                        if (workLoad.total + duration > 24) continue;
-
-                        // 2. Daily Constraint (Distribute Equally)
-                        // Cap daily hours to 6 to force distribution across days (Allows 2 labs = 6h)
-                        if (workLoad.daily[day] + duration > 6) continue;
-                    }
-
-                    let isFree = true;
-
-                    // Check Time Constraints & Availability
-                    for (let i = 0; i < duration; i++) {
-                        const timeIdx = h + i;
-                        if (timeIdx >= HOURS.length) { isFree = false; break; }
-                        const hourLabel = HOURS[timeIdx];
-
-                        // Check Class Free
-                        if (this.timetables[dept][sem][div][day] && this.timetables[dept][sem][div][day][hourLabel]) {
-                            isFree = false; break;
-                        }
-
-                        // Check Teacher Free
-                        if (teacher && !this.teacherAvailability[teacher.id][day][hourLabel]) {
-                            isFree = false; break;
-                        }
-                    }
-
-                    if (isFree) {
-                        // ASSIGN
+                const reqCount = currentSlotRequest.requiredTeachers || 1;
+                if (reqCount === 1) {
+                    for (const teacher of possibleTeachers) {
+                        let isFree = true;
                         for (let i = 0; i < duration; i++) {
                             const hourLabel = HOURS[h + i];
-                            const hourSlot = {
-                                subject: subject.name,
-                                code: subject.code,
-                                type: currentSlotRequest.type,
-                                teacherName: teacher ? teacher.name : "Unassigned",
-                                teacherEmpId: teacher ? teacher.employeeId : "",
-                                teacherId: teacher ? teacher.id : "",
-                                avgRating: teacher ? (teacher.avgRating || 0) : 0,
-                                room: `Room ${sem.replace(/\D/g, '')}-${div}`,
-                                department: dept,
-                                semester: sem,
-                                division: div
-                            };
-
-                            if (!this.timetables[dept][sem][div][day]) this.timetables[dept][sem][div][day] = {};
-                            this.timetables[dept][sem][div][day][hourLabel] = hourSlot;
-
-                            if (teacher) {
-                                this.teacherAvailability[teacher.id][day][hourLabel] = false;
+                            if ((this.timetables[dept][sem][div][day] && this.timetables[dept][sem][div][day][hourLabel]) || (teacher && !this.teacherAvailability[teacher.id][day][hourLabel])) { isFree = false; break; }
+                        }
+                        if (isFree && (!teacher || (this.teacherWorkLoad[teacher.id].total + duration <= 24 && this.teacherWorkLoad[teacher.id].daily[day] + duration <= 6))) {
+                            this.assignSlot(dept, sem, div, day, h, duration, subject, currentSlotRequest.type, teacher);
+                            if (this.backtrack(dept, sem, div, slots, index + 1)) return true;
+                            this.unassignSlot(dept, sem, div, day, h, duration, teacher);
+                        }
+                    }
+                } else if (reqCount === 2) {
+                    for (let i = 0; i < possibleTeachers.length; i++) {
+                        for (let j = i + 1; j < possibleTeachers.length; j++) {
+                            const t1 = possibleTeachers[i], t2 = possibleTeachers[j];
+                            if (!t1 || !t2) continue;
+                            let isFree = true;
+                            for (let k = 0; k < duration; k++) {
+                                const hourLabel = HOURS[h + k];
+                                if ((this.timetables[dept][sem][div][day] && this.timetables[dept][sem][div][day][hourLabel]) || !this.teacherAvailability[t1.id][day][hourLabel] || !this.teacherAvailability[t2.id][day][hourLabel]) { isFree = false; break; }
                             }
-                        }
-
-                        // Update WorkLoad
-                        if (teacher) {
-                            this.teacherWorkLoad[teacher.id].total += duration;
-                            this.teacherWorkLoad[teacher.id].daily[day] += duration;
-                        }
-
-                        // RECURSE
-                        if (this.backtrack(dept, sem, div, slots, index + 1)) {
-                            return true;
-                        }
-
-                        // BACKTRACK (Unassign)
-                        for (let i = 0; i < duration; i++) {
-                            const hourLabel = HOURS[h + i];
-                            delete this.timetables[dept][sem][div][day][hourLabel];
-                            if (teacher) {
-                                this.teacherAvailability[teacher.id][day][hourLabel] = true;
+                            if (isFree && this.teacherWorkLoad[t1.id].total + duration <= 24 && this.teacherWorkLoad[t2.id].total + duration <= 24) {
+                                this.assignSlot(dept, sem, div, day, h, duration, subject, currentSlotRequest.type, null, [t1, t2]);
+                                if (this.backtrack(dept, sem, div, slots, index + 1)) return true;
+                                this.unassignSlot(dept, sem, div, day, h, duration, null, [t1, t2]);
                             }
-                        }
-
-                        // Revert WorkLoad
-                        if (teacher) {
-                            this.teacherWorkLoad[teacher.id].total -= duration;
-                            this.teacherWorkLoad[teacher.id].daily[day] -= duration;
                         }
                     }
                 }
             }
         }
+        return false;
+    }
 
-        this.log(`Failed to schedule ${subject.name} type ${currentSlotRequest.type} (Index: ${index}). Tried all dates/times.`);
-        console.warn(`Backtrack failed to schedule ${subject.name} (${currentSlotRequest.type}) at index ${index}`);
-        return false; // No slot found for this subject
+    assignSlot(dept, sem, div, day, start, duration, subject, type, teacher, multi = null) {
+        for (let i = 0; i < duration; i++) {
+            const hour = HOURS[start + i];
+            const slot = {
+                subject: subject.name, code: subject.code, type, 
+                teacherName: teacher ? teacher.name : (multi ? multi.map(t => t.name).join(' & ') : "Unassigned"),
+                teacherId: teacher ? teacher.id : "", teacherEmpId: teacher ? teacher.employeeId : "",
+                multiTeachers: multi ? multi.map(t => ({ teacherId: t.id, teacherName: t.name, teacherEmpId: t.employeeId })) : null,
+                room: `Room ${sem.replace(/\D/g, '')}-${div}`, department: dept, semester: sem, division: div
+            };
+            if (!this.timetables[dept][sem][div][day]) this.timetables[dept][sem][div][day] = {};
+            this.timetables[dept][sem][div][day][hour] = slot;
+            if (teacher) this.markBusy(teacher.id, day, hour);
+            if (multi) multi.forEach(t => this.markBusy(t.id, day, hour));
+        }
+    }
+
+    unassignSlot(dept, sem, div, day, start, duration, teacher, multi = null) {
+        for (let i = 0; i < duration; i++) {
+            const hour = HOURS[start + i];
+            delete this.timetables[dept][sem][div][day][hour];
+            if (teacher) {
+                this.teacherAvailability[teacher.id][day][hour] = true;
+                this.teacherWorkLoad[teacher.id].total--;
+                this.teacherWorkLoad[teacher.id].daily[day]--;
+            }
+            if (multi) multi.forEach(t => {
+                this.teacherAvailability[t.id][day][hour] = true;
+                this.teacherWorkLoad[t.id].total--;
+                this.teacherWorkLoad[t.id].daily[day]--;
+            });
+        }
     }
 }

@@ -1,0 +1,87 @@
+{
+  "2019 scheme": {
+    "semester 2": {
+      "MAT102": {
+        "subjectName": "VECTOR CALCULUS, DIFFERENTIAL EQUATIONS AND TRANSFORMS",
+        "subjectCode": "MAT 102",
+        "credit": "4",
+        "hours": "4"
+      },
+      "PHT100": {
+        "subjectName": "ENGINEERING PHYSICS A",
+        "subjectCode": "PHT 100",
+        "credit": "4",
+        "hours": "4"
+      },
+      "CYT100": {
+        "subjectName": "ENGINEERING CHEMISTRY",
+        "subjectCode": "CYT 100",
+        "credit": "4",
+        "hours": "4"
+      },
+      "EST100": {
+        "subjectName": "ENGINEERING MECHANICS",
+        "subjectCode": "EST 100",
+        "credit": "3",
+        "hours": "3"
+      },
+      "EST110": {
+        "subjectName": "ENGINEERING GRAPHICS",
+        "subjectCode": "EST 110",
+        "credit": "3",
+        "hours": "4"
+      },
+      "EST120": {
+        "subjectName": "BASICS OF CIVIL & MECHANICAL ENGINEERING",
+        "subjectCode": "EST 120",
+        "credit": "4",
+        "hours": "4"
+      },
+      "EST130": {
+        "subjectName": "BASICS OF ELECTRICAL & ELECTRONICS ENGINEERING",
+        "subjectCode": "EST 130",
+        "credit": "4",
+        "hours": "4"
+      },
+      "HUT102": {
+        "subjectName": "PROFESSIONAL COMMUNICATION",
+        "subjectCode": "HUT 102",
+        "credit": "--",
+        "hours": "4"
+      },
+      "EST102": {
+        "subjectName": "PROGRAMMING IN C",
+        "subjectCode": "EST 102",
+        "credit": "4",
+        "hours": "5"
+      },
+      "PHL120": {
+        "subjectName": "ENGINEERING PHYSICS LAB",
+        "subjectCode": "PHL 120",
+        "credit": "1",
+        "hours": "2"
+      },
+      "CYL120": {
+        "subjectName": "ENGINEERING CHEMISTRY LAB",
+        "subjectCode": "CYL 120",
+        "credit": "1",
+        "hours": "2"
+      },
+      "ESL120": {
+        "subjectName": "CIVIL & MECHANICAL WORKSHOP",
+        "subjectCode": "ESL 120",
+        "credit": "1",
+        "hours": "2"
+      },
+      "ESL130": {
+        "subjectName": "ELECTRICAL & ELECTRONICS WORKSHOP",
+        "subjectCode": "ESL 130",
+        "credit": "1",
+        "hours": "2"
+      }
+    }
+  },
+  "2024 scheme": {
+    "placeholder": true
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "CST414": {
+    "subjectName": "DEEP LEARNING",
+    "subjectCode": "CST 414",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST424": {
+    "subjectName": "PROGRAMMING PARADIGMS",
+    "subjectCode": "CST 424",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST434": {
+    "subjectName": "CRYPTOGRAPHY",
+    "subjectCode": "CST 434",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST444": {
+    "subjectName": "SOFT COMPUTING",
+    "subjectCode": "CST 444",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST454": {
+    "subjectName": "FUZZY SET THEORY AND APPLICATIONS",
+    "subjectCode": "CST 454",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST464": {
+    "subjectName": "EMBEDDED SYSTEMS",
+    "subjectCode": "CST 464",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST474": {
+    "subjectName": "COMPUTER VISION",
+    "subjectCode": "CST 474",
+    "credit": "3",
+    "hours": "3"
+  }
+}

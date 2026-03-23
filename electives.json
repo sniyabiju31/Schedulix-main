@@ -1,0 +1,44 @@
+{
+  "CST312": {
+    "subjectName": "FOUNDATIONS OF MACHINE LEARNING",
+    "subjectCode": "CST 312",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST322": {
+    "subjectName": "DATA ANALYTICS",
+    "subjectCode": "CST 322",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST332": {
+    "subjectName": "FOUNDATIONS OF SECURITY IN COMPUTING",
+    "subjectCode": "CST 332",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST342": {
+    "subjectName": "AUTOMATED VERIFICATION",
+    "subjectCode": "CST 342",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST352": {
+    "subjectName": "INTRODUCTION TO IA32 ARCHITECTURE",
+    "subjectCode": "CST 352",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST362": {
+    "subjectName": "PROGRAMMING IN PYTHON",
+    "subjectCode": "CST 362",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST372": {
+    "subjectName": "DATA AND COMPUTER COMMUNICATION",
+    "subjectCode": "CST 372",
+    "credit": "3",
+    "hours": "3"
+  }
+}
