@@ -1,0 +1,62 @@
+{
+  "MAT206": {
+    "subjectName": "GRAPH THEORY",
+    "subjectCode": "MAT 206",
+    "credit": "4",
+    "hours": "4"
+  },
+  "CST202": {
+    "subjectName": "COMPUTER ORGANISATION AND ARCHITECTURE",
+    "subjectCode": "CST 202",
+    "credit": "4",
+    "hours": "4"
+  },
+  "CST204": {
+    "subjectName": "DATABASE MANAGEMENT SYSTEMS",
+    "subjectCode": "CST 204",
+    "credit": "4",
+    "hours": "4"
+  },
+  "CST206": {
+    "subjectName": "OPERATING SYSTEMS",
+    "subjectCode": "CST 206",
+    "credit": "4",
+    "hours": "4"
+  },
+  "EST200": {
+    "subjectName": "DESIGN & ENGINEERING",
+    "subjectCode": "EST 200",
+    "credit": "2",
+    "hours": "2"
+  },
+  "HUT200": {
+    "subjectName": "PROFESSIONAL ETHICS",
+    "subjectCode": "HUT 200",
+    "credit": "2",
+    "hours": "2"
+  },
+  "MNC202": {
+    "subjectName": "CONSTITUTION OF INDIA",
+    "subjectCode": "MNC 202",
+    "credit": "--",
+    "hours": "2"
+  },
+  "CSL202": {
+    "subjectName": "DIGITAL LAB",
+    "subjectCode": "CSL 202",
+    "credit": "2",
+    "hours": "3"
+  },
+  "CSL204": {
+    "subjectName": "OPERATING SYSTEMS LAB",
+    "subjectCode": "CSL204",
+    "credit": "2",
+    "hours": "3"
+  },
+  "VAC": {
+    "subjectName": "Remedial/Minor/Honors course",
+    "subjectCode": "VAC",
+    "credit": "4",
+    "hours": "4"
+  }
+}

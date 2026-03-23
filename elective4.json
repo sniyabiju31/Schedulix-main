@@ -1,0 +1,44 @@
+{
+  "CST416": {
+    "subjectName": "FORMAL METHODS AND TOOLS IN SOFTWARE ENGINEERING",
+    "subjectCode": "CST 416",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST426": {
+    "subjectName": "CLIENT SERVER ARCHITECTURE",
+    "subjectCode": "CST 426",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST436": {
+    "subjectName": "PARALLEL COMPUTING",
+    "subjectCode": "CST 436",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST446": {
+    "subjectName": "DATA COMPRESSION TECHNIQUES",
+    "subjectCode": "CST 446",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST456": {
+    "subjectName": "UNIFIED EXTENDED FIRMWARE INTERFACE",
+    "subjectCode": "CST 456",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST466": {
+    "subjectName": "DATA MINING",
+    "subjectCode": "CST 466",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST476": {
+    "subjectName": "MOBILE COMPUTING",
+    "subjectCode": "CST 476",
+    "credit": "3",
+    "hours": "3"
+  }
+}

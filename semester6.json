@@ -1,0 +1,56 @@
+{
+  "CST302": {
+    "subjectName": "COMPILER DESIGN",
+    "subjectCode": "CST 302",
+    "credit": "4",
+    "hours": "4"
+  },
+  "CST304": {
+    "subjectName": "COMPUTER GRAPHICS AND IMAGE PROCESSING",
+    "subjectCode": "CST 304",
+    "credit": "4",
+    "hours": "4"
+  },
+  "CST306": {
+    "subjectName": "ALGORITHM ANALYSIS AND DESIGN",
+    "subjectCode": "CST 306",
+    "credit": "4",
+    "hours": "4"
+  },
+  "CST---": {
+    "subjectName": "PROGRAM ELECTIVE I",
+    "subjectCode": "CST ---",
+    "credit": "3",
+    "hours": "3"
+  },
+  "HUT300": {
+    "subjectName": "INDUSTRIAL ECONOMICS & FOREIGN TRADE",
+    "subjectCode": "HUT 300",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST308": {
+    "subjectName": "COMPREHENSIVE COURSE WORK",
+    "subjectCode": "CST 308",
+    "credit": "1",
+    "hours": "1"
+  },
+  "CSL332": {
+    "subjectName": "NETWORKING LAB",
+    "subjectCode": "CSL 332",
+    "credit": "2",
+    "hours": "3"
+  },
+  "CSD334": {
+    "subjectName": "MINIPROJECT",
+    "subjectCode": "CSD 334",
+    "credit": "2",
+    "hours": "3"
+  },
+  "VAC": {
+    "subjectName": "Remedial/Minor/Honors course*",
+    "subjectCode": "VAC",
+    "credit": "4",
+    "hours": "4"
+  }
+}

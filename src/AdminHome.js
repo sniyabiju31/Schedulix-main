@@ -220,15 +220,33 @@ const AdminHomePage = () => {
                           if (hours) {
                             Object.keys(hours).forEach(hour => {
                               const slot = hours[hour];
-                              const teacher = teachersList.find(t =>
-                                (t.employeeId && t.employeeId === slot.teacherEmpId) ||
-                                (t.name === slot.teacherName)
-                              );
-
-                              if (teacher && teacher.id === selectedTeacherId) {
-                                if (!teacherSchedule[day]) teacherSchedule[day] = {};
-                                // Append Division info to slot
-                                teacherSchedule[day][hour] = { ...slot, dept, sem, div };
+                              if (slot.isParallel && slot.parallelSlots) {
+                                const subSlot = slot.parallelSlots.find(ps =>
+                                  ps.teacherId === selectedTeacherId ||
+                                  (ps.teacherEmpId && ps.teacherEmpId === teachersList.find(t => t.id === selectedTeacherId)?.employeeId)
+                                );
+                                if (subSlot) {
+                                  if (!teacherSchedule[day]) teacherSchedule[day] = {};
+                                  teacherSchedule[day][hour] = { ...subSlot, dept, sem, div, isParallel: true, groupName: slot.groupName };
+                                }
+                              } else if (slot.multiTeachers) {
+                                const isTeacherAssigned = slot.multiTeachers.some(t => 
+                                  t.teacherId === selectedTeacherId || 
+                                  (t.teacherEmpId && t.teacherEmpId === teachersList.find(t1 => t1.id === selectedTeacherId)?.employeeId)
+                                );
+                                if (isTeacherAssigned) {
+                                  if (!teacherSchedule[day]) teacherSchedule[day] = {};
+                                  teacherSchedule[day][hour] = { ...slot, dept, sem, div };
+                                }
+                              } else {
+                                const teacher = teachersList.find(t =>
+                                  (t.employeeId && t.employeeId === slot.teacherEmpId) ||
+                                  (t.name === slot.teacherName)
+                                );
+                                if (teacher && teacher.id === selectedTeacherId) {
+                                  if (!teacherSchedule[day]) teacherSchedule[day] = {};
+                                  teacherSchedule[day][hour] = { ...slot, dept, sem, div };
+                                }
                               }
                             });
                           }
@@ -269,15 +287,42 @@ const AdminHomePage = () => {
                     const hoursData = daysData[day];
                     Object.keys(hoursData).forEach(hour => { // Hour level
                       const slot = hoursData[hour];
-                      const teacher = teachersList.find(t =>
-                        (t.employeeId && t.employeeId === slot.teacherEmpId) ||
-                        (t.name === slot.teacherName)
-                      );
-
-                      if (teacher) {
-                        if (!teacherMap[teacher.id]) teacherMap[teacher.id] = {};
-                        if (!teacherMap[teacher.id][day]) teacherMap[teacher.id][day] = {};
-                        teacherMap[teacher.id][day][hour] = { ...slot, dept, sem, div };
+                      if (slot.isParallel && slot.parallelSlots) {
+                        slot.parallelSlots.forEach(subSlot => {
+                          const teacher = teachersList.find(t =>
+                            t.id === subSlot.teacherId ||
+                            (subSlot.teacherEmpId && t.employeeId === subSlot.teacherEmpId) ||
+                            (subSlot.teacherName && t.name === subSlot.teacherName)
+                          );
+                          if (teacher) {
+                            if (!teacherMap[teacher.id]) teacherMap[teacher.id] = {};
+                            if (!teacherMap[teacher.id][day]) teacherMap[teacher.id][day] = {};
+                            teacherMap[teacher.id][day][hour] = { ...subSlot, dept, sem, div, isParallel: true, groupName: slot.groupName };
+                          }
+                        });
+                      } else if (slot.multiTeachers) {
+                        slot.multiTeachers.forEach(tInfo => {
+                          const teacher = teachersList.find(t =>
+                            t.id === tInfo.teacherId ||
+                            (tInfo.teacherEmpId && t.employeeId === tInfo.teacherEmpId) ||
+                            (tInfo.teacherName && t.name === tInfo.teacherName)
+                          );
+                          if (teacher) {
+                            if (!teacherMap[teacher.id]) teacherMap[teacher.id] = {};
+                            if (!teacherMap[teacher.id][day]) teacherMap[teacher.id][day] = {};
+                            teacherMap[teacher.id][day][hour] = { ...slot, dept, sem, div };
+                          }
+                        });
+                      } else {
+                        const teacher = teachersList.find(t =>
+                          (t.employeeId && t.employeeId === slot.teacherEmpId) ||
+                          (t.name === slot.teacherName)
+                        );
+                        if (teacher) {
+                          if (!teacherMap[teacher.id]) teacherMap[teacher.id] = {};
+                          if (!teacherMap[teacher.id][day]) teacherMap[teacher.id][day] = {};
+                          teacherMap[teacher.id][day][hour] = { ...slot, dept, sem, div };
+                        }
                       }
                     });
                   });
@@ -1049,6 +1094,117 @@ const AdminHomePage = () => {
     }
   };
 
+  const handleSeedS8 = async () => {
+    try {
+      if (!window.confirm("Seed Semester 8 Teachers, Subjects & Assignments? This will set up Div A & B for S8.")) return;
+
+      const s8Teachers = [
+        { name: "Dr. Valanto Alappat", email: "valanto.alappat.jec@gmail.com", employeeId: "T_VALANTO", department: "Computer Science" },
+        { name: "Ms. Aswathy Wilson", email: "aswathy.wilson.jec@gmail.com", employeeId: "T_ASWATHY", department: "Computer Science" },
+        { name: "Dr. Shyjith M B", email: "shyjith.mb.jec@gmail.com", employeeId: "T_SHYJITH", department: "Computer Science" },
+        { name: "Ms. Aparna Mohan", email: "aparna.mohan.jec@gmail.com", employeeId: "T_APARNA", department: "Computer Science" },
+        { name: "Ms. Jyothi P Joy", email: "jyothi.pjoy.jec@gmail.com", employeeId: "T_JYOTHI", department: "Computer Science" },
+        { name: "Ms. Neeraja James", email: "neeraja.james.jec@gmail.com", employeeId: "T_NEERAJA", department: "Computer Science" },
+        { name: "Ms. Neethu T V", email: "neethu.tv.jec@gmail.com", employeeId: "T_NEETHU", department: "Computer Science" },
+        { name: "Ms. Sruthy K S", email: "sruthy.ks.jec@gmail.com", employeeId: "T_SRUTHY", department: "Computer Science" },
+        { name: "Dr. Sobha Xavier P", email: "sobha.xavier.jec@gmail.com", employeeId: "T_SOBHA", department: "Computer Science" },
+        { name: "Mr. Arun K", email: "arun.k.jec@gmail.com", employeeId: "T_ARUN", department: "Computer Science" },
+        { name: "Ms. Athira K P", email: "athira.kp.jec@gmail.com", employeeId: "T_ATHIRA", department: "Computer Science" },
+        { name: "Ms. Sonia Joseph", email: "sonia.joseph.jec@gmail.com", employeeId: "T_SONIA", department: "Computer Science" }
+      ];
+
+      const s8Subjects = [
+        { code: "CST402", name: "DISTRIBUTED COMPUTING", credits: 3, teachingHours: 3, type: "Theory", department: "Computer Science", semester: "Semester 8" },
+        { code: "CST404", name: "COMPREHENSIVE COURSE VIVA", credits: 1, teachingHours: 1, type: "Theory", department: "Computer Science", semester: "Semester 8" },
+        { code: "CSD416-1", name: "PROJECT PHASE II (P1)", credits: 1, teachingHours: 4, type: "Lab", department: "Computer Science", semester: "Semester 8", requiredTeachers: 2 },
+        { code: "CSD416-2", name: "PROJECT PHASE II (P2)", credits: 1, teachingHours: 4, type: "Lab", department: "Computer Science", semester: "Semester 8", requiredTeachers: 2 },
+        { code: "CSD416-3", name: "PROJECT PHASE II (P3)", credits: 2, teachingHours: 4, type: "Lab", department: "Computer Science", semester: "Semester 8", requiredTeachers: 2 },
+        { code: "CST426", name: "DATA MINING", credits: 3, teachingHours: 3, type: "Theory", department: "Computer Science", semester: "Semester 8", category: "Elective IV" },
+        { code: "CST464", name: "EMBEDDED SYSTEMS", credits: 3, teachingHours: 3, type: "Theory", department: "Computer Science", semester: "Semester 8", category: "Elective III" },
+        { code: "CST426_MC", name: "MOBILE COMPUTING", credits: 3, teachingHours: 3, type: "Theory", department: "Computer Science", semester: "Semester 8", category: "Elective IV" },
+        { code: "CST444", name: "SOFT COMPUTING", credits: 3, teachingHours: 3, type: "Theory", department: "Computer Science", semester: "Semester 8", category: "Elective III" },
+        { code: "CST458", name: "SOFTWARE TESTING", credits: 3, teachingHours: 3, type: "Theory", department: "Computer Science", semester: "Semester 8", category: "Elective IV" },
+        { code: "PTL", name: "PT & Library", credits: 0, teachingHours: 1, type: "Theory", department: "Computer Science", semester: "Semester 8" }
+      ];
+
+      const assignments = [
+        { email: "aswathy.wilson.jec@gmail.com", sub: "DISTRIBUTED COMPUTING", div: "A" },
+        { email: "sobha.xavier.jec@gmail.com", sub: "DISTRIBUTED COMPUTING", div: "B" },
+        { email: "valanto.alappat.jec@gmail.com", sub: "COMPREHENSIVE COURSE VIVA", div: "A" },
+        { email: "sobha.xavier.jec@gmail.com", sub: "COMPREHENSIVE COURSE VIVA", div: "B" },
+        // Div A Project - 2 teachers per part
+        { email: "shyjith.mb.jec@gmail.com", sub: "PROJECT PHASE II (P1)", div: "A" },
+        { email: "valanto.alappat.jec@gmail.com", sub: "PROJECT PHASE II (P1)", div: "A" },
+        { email: "shyjith.mb.jec@gmail.com", sub: "PROJECT PHASE II (P2)", div: "A" },
+        { email: "aswathy.wilson.jec@gmail.com", sub: "PROJECT PHASE II (P2)", div: "A" },
+        { email: "valanto.alappat.jec@gmail.com", sub: "PROJECT PHASE II (P3)", div: "A" },
+        { email: "aswathy.wilson.jec@gmail.com", sub: "PROJECT PHASE II (P3)", div: "A" },
+
+        // Div B Project - 2 teachers per part
+        { email: "sobha.xavier.jec@gmail.com", sub: "PROJECT PHASE II (P1)", div: "B" },
+        { email: "arun.k.jec@gmail.com", sub: "PROJECT PHASE II (P1)", div: "B" },
+        { email: "sobha.xavier.jec@gmail.com", sub: "PROJECT PHASE II (P2)", div: "B" },
+        { email: "athira.kp.jec@gmail.com", sub: "PROJECT PHASE II (P2)", div: "B" },
+        { email: "arun.k.jec@gmail.com", sub: "PROJECT PHASE II (P3)", div: "B" },
+        { email: "athira.kp.jec@gmail.com", sub: "PROJECT PHASE II (P3)", div: "B" },
+        { email: "aparna.mohan.jec@gmail.com", sub: "DATA MINING", div: "A" },
+        { email: "aparna.mohan.jec@gmail.com", sub: "DATA MINING", div: "B" },
+        { email: "neeraja.james.jec@gmail.com", sub: "EMBEDDED SYSTEMS", div: "A" },
+        { email: "neethu.tv.jec@gmail.com", sub: "MOBILE COMPUTING", div: "A" },
+        { email: "sruthy.ks.jec@gmail.com", sub: "SOFT COMPUTING", div: "A" },
+        { email: "arun.k.jec@gmail.com", sub: "SOFT COMPUTING", div: "B" },
+        { email: "jyothi.pjoy.jec@gmail.com", sub: "SOFTWARE TESTING", div: "A" },
+        { email: "sonia.joseph.jec@gmail.com", sub: "SOFTWARE TESTING", div: "B" },
+        { email: "aswathy.wilson.jec@gmail.com", sub: "PT & Library", div: "A" },
+        { email: "arun.k.jec@gmail.com", sub: "PT & Library", div: "B" }
+      ];
+
+      // 1. Setup Divisions for S8 (A and B)
+      await update(rtdbRef(rtdb, 'settings/divisions/Computer Science'), { "Semester 8": 2 });
+
+      // 2. Add Teachers
+      const teachersRef = rtdbRef(rtdb, 'teachers');
+      for (const t of s8Teachers) {
+        const q = rtdbQuery(teachersRef, orderByChild('employeeId'), equalTo(t.employeeId));
+        const snap = await rtdbGet(q);
+        if (!snap.exists()) {
+          await set(push(teachersRef), { ...t, createdAt: Date.now() });
+        }
+      }
+
+      // 3. Add Subjects
+      const subjectsRef = rtdbRef(rtdb, 'subjects');
+      for (const s of s8Subjects) {
+        const q = rtdbQuery(subjectsRef, orderByChild('code'), equalTo(s.code));
+        const snap = await rtdbGet(q);
+        // Only add if code doesn't exist for this semester
+        if (snap.exists()) {
+           const matches = Object.values(snap.val());
+           const exists = matches.some(m => m.semester === s.semester);
+           if (!exists) await set(push(subjectsRef), { ...s, createdAt: Date.now() });
+        } else {
+          await set(push(subjectsRef), { ...s, createdAt: Date.now() });
+        }
+      }
+
+      // 4. Add Preferences
+      const prefsRef = rtdbRef(rtdb, 'preferences');
+      for (const ass of assignments) {
+        await set(push(prefsRef), {
+          email: ass.email,
+          subjectPref1: ass.sub,
+          classPref1: `Semester 8 ${ass.div}`,
+          updatedAt: Date.now()
+        });
+      }
+
+      alert("S8 Data seeded successfully! Please go to Class Timetables and run Auto-Generate for S8.");
+    } catch (err) {
+      console.error(err);
+      alert("Seeding failed: " + err.message);
+    }
+  };
+
   const handleAutoGenerate = async () => {
     if (!selectedDept || !selectedSemester || selectedDept === 'All') {
       alert("Please select a specific Department and Semester first (cannot auto-generate for 'All').");
@@ -1370,6 +1526,10 @@ const AdminHomePage = () => {
   const handleSlotClick = (day, hour) => {
     const existingSlot = timetableData[day] ? timetableData[day][hour] : null;
     if (existingSlot) {
+      if (existingSlot.isParallel) {
+        alert("This is a Parallel Elective slot. Manual editing is currently disabled for parallel slots to avoid database inconsistency. Please use 'Auto-Generate' to re-create the schedule if needed.");
+        return;
+      }
       setSubject(existingSlot.subject);
       setTeacher(existingSlot.teacherEmpId); // Store ID/EmpID
       setRoom(existingSlot.room);
@@ -1662,6 +1822,30 @@ const AdminHomePage = () => {
                 <p>{classes.length * days.length * hours.length - Object.keys(timetableData).length}</p>
               </div>
             </div>
+
+            <div style={{ marginTop: '30px', padding: '20px', background: 'rgba(99, 102, 241, 0.1)', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+              <h3 style={{ margin: '0 0 10px 0', color: '#6366f1' }}>Quick Setup: Semester 8</h3>
+              <p style={{ margin: '0 0 20px 0', fontSize: '0.9rem', opacity: 0.8 }}>
+                Automatically populate the database with teachers and subjects for Semester 8 (Divisions A & B) as per the assigned list.
+              </p>
+              <button 
+                onClick={handleSeedS8}
+                style={{ 
+                  background: 'linear-gradient(90deg, #6366f1 0%, #4f46e5 100%)', 
+                  color: 'white', 
+                  border: 'none', 
+                  padding: '12px 24px', 
+                  borderRadius: '8px', 
+                  fontWeight: 'bold', 
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}
+              >
+                <PlusCircle size={20} /> Seed Semester 8 Data
+              </button>
+            </div>
           </div>
         )}
 
@@ -1814,8 +1998,10 @@ const AdminHomePage = () => {
                                 <td key={`${teacher.id}-${day}-${hour}`} style={{ fontSize: '0.75rem', padding: '4px', height: '60px' }}>
                                   {slot ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                      <span style={{ color: 'var(--accent-cyan)', fontWeight: 'bold' }}>{slot.subject}</span>
-                                      <span style={{ opacity: 0.7 }}>{slot.dept.split(' ').map(w => w[0]).join('')}-{slot.sem.replace('Semester ', 'S')}</span>
+                                      <span style={{ color: slot.isParallel ? 'var(--accent-cyan)' : '#fff', fontWeight: 'bold' }}>
+                                        {slot.isParallel ? `[${slot.groupName}] ${slot.subject}` : slot.subject}
+                                      </span>
+                                      <span style={{ opacity: 0.7 }}>{slot.dept.split(' ').map(w => w[0]).join('')}-{slot.sem.replace('Semester ', 'S')} ({slot.div})</span>
                                       <span style={{ opacity: 0.5, fontSize: '0.7em' }}>{slot.room}</span>
                                     </div>
                                   ) : (
@@ -1854,10 +2040,30 @@ const AdminHomePage = () => {
                           >
                             {classInfo ? (
                               <div className="class-info">
-                                <div className="subject">{classInfo.subject}</div>
-                                {activeMenu === 'class-timetable' && <div className="teacher">{classInfo.teacherName}</div>}
-                                {activeMenu === 'teacher-timetable' && <div className="teacher" style={{ color: '#fff' }}>{classInfo.dept} - {classInfo.sem}</div>}
-                                <div className="room">{classInfo.room}</div>
+                                {classInfo.isParallel && classInfo.parallelSlots ? (
+                                  <>
+                                    <div className="subject" style={{ color: 'var(--accent-cyan)', fontWeight: 'bold' }}>{classInfo.groupName || classInfo.subject}</div>
+                                    <div className="parallel-container" style={{ fontSize: '0.7rem', marginTop: '4px', textAlign: 'left', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '4px' }}>
+                                      {classInfo.parallelSlots.map((ps, idx) => (
+                                        <div key={idx} style={{ marginBottom: idx < classInfo.parallelSlots.length - 1 ? '4px' : 0, borderBottom: idx < classInfo.parallelSlots.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', paddingBottom: idx < classInfo.parallelSlots.length - 1 ? '4px' : 0 }}>
+                                          <div style={{ color: '#fff', fontWeight: '500' }}>{ps.subject}</div>
+                                          <div style={{ opacity: 0.7, fontSize: '0.9em' }}>{ps.teacherName}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="subject">{classInfo.subject}</div>
+                                    {activeMenu === 'class-timetable' && <div className="teacher">{classInfo.teacherName}</div>}
+                                    {activeMenu === 'teacher-timetable' && (
+                                      <div className="teacher" style={{ color: '#fff' }}>
+                                        {classInfo.dept ? classInfo.dept.split(' ').map(w => w[0]).join('') : ''}-{classInfo.sem ? classInfo.sem.replace('Semester ', 'S') : ''} {classInfo.division ? `(${classInfo.division})` : ''}
+                                      </div>
+                                    )}
+                                    <div className="room">{classInfo.room}</div>
+                                  </>
+                                )}
                               </div>
                             ) : (
                               <span className="slot">+</span>

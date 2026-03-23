@@ -1,0 +1,44 @@
+{
+  "CST418": {
+    "subjectName": "HIGH PERFORMANCE COMPUTING",
+    "subjectCode": "CST 418",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST428": {
+    "subjectName": "BLOCK CHAIN TECHNOLOGIES",
+    "subjectCode": "CST 428",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST438": {
+    "subjectName": "IMAGE PROCESSING TECHNIQUE",
+    "subjectCode": "CST 438",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST448": {
+    "subjectName": "INTERNET OF THINGS",
+    "subjectCode": "CST 448",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST458": {
+    "subjectName": "SOFTWARE TESTING",
+    "subjectCode": "CST 458",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST468": {
+    "subjectName": "BIOINFORMATICS",
+    "subjectCode": "CST 468",
+    "credit": "3",
+    "hours": "3"
+  },
+  "CST478": {
+    "subjectName": "COMPUTATIONAL LINGUISTICS",
+    "subjectCode": "CST 478",
+    "credit": "3",
+    "hours": "3"
+  }
+}
