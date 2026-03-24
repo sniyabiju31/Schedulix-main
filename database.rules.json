@@ -53,6 +53,10 @@
     "preferences": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "planner": {
+      ".read": true,
+      ".write": true
     }
   }
 }
