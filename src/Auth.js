@@ -36,30 +36,58 @@ export default function Auth() {
     try {
       if (mode === "activate") {
         // FIRST TIME USER LOGIN (Staff or Student)
-        const { email, employeeId, password } = form; // employeeId is used for Roll Number too
-        const collectionName = role === "staff" ? "teachers" : role === "parent" ? "parents" : "students";
-        const idField = role === "staff" ? "employeeId" : "rollNo";
+        const { email, employeeId, password } = form; // employeeId is used for Roll Number/ID too
+        const idField = role === "staff" ? "employeeId" : "registerNo";
         const roleLabel = role === "staff" ? "Staff" : role === "parent" ? "Parent" : "Student";
+        let recordData = null;
 
-        // 1. Verify existence in RTDB
-        const itemsRef = ref(rtdb, collectionName);
-        const qEmail = rtdbQuery(itemsRef, orderByChild("email"), equalTo(email));
-        const snapEmail = await rtdbGet(qEmail);
+        if (role === "parent") {
+          // Parent logic: Verify that the child (student) exists by Roll Number (employeeId field)
+          const studentRef = ref(rtdb, "students");
+          const qStudent = rtdbQuery(studentRef, orderByChild("registerNo"), equalTo(employeeId));
+          const snapStudent = await rtdbGet(qStudent);
 
-        if (!snapEmail.exists()) {
-          alert(`No ${roleLabel} found with this Email. Please contact Admin.`);
-          return;
+          if (!snapStudent.exists()) {
+            alert(`No student found with Register Number: ${employeeId}. Please check the number or contact Admin.`);
+            return;
+          }
+
+          const studentsDataMap = snapStudent.val();
+          const studentKey = Object.keys(studentsDataMap)[0];
+          const studentData = studentsDataMap[studentKey] || {};
+
+          recordData = {
+            registerNo: studentData.registerNo || employeeId,
+            studentUid: studentData.uid || studentKey || "", 
+            studentName: studentData.name || "Unknown",
+            studentRegNo: studentData.registerNo || employeeId,
+            email: email, 
+            name: `Parent of ${studentData.name || "Unknown"}`,
+            role: "parent",
+            department: studentData.department || "",
+            semester: studentData.semester || "",
+            division: studentData.division || "A"
+          };
+        } else {
+          // Staff/Student logic: Verify pre-registered email record
+          const collectionName = role === "staff" ? "teachers" : "students";
+          const queryRef = rtdbQuery(ref(rtdb, collectionName), orderByChild("email"), equalTo(email));
+          const snap = await rtdbGet(queryRef);
+
+          if (!snap.exists()) {
+            alert(`No ${roleLabel} record found with this Email. Please contact Admin.`);
+            return;
+          }
+
+          const itemsData = snap.val();
+          const itemKey = Object.keys(itemsData).find(key => itemsData[key][idField] === employeeId);
+
+          if (!itemKey) {
+            alert(`${role === "staff" ? "Employee ID" : "Roll Number"} does not match our records for this email.`);
+            return;
+          }
+          recordData = itemsData[itemKey];
         }
-
-        const itemsData = snapEmail.val();
-        const itemKey = Object.keys(itemsData).find(key => itemsData[key][idField] === employeeId);
-
-        if (!itemKey) {
-          alert(`${role === "staff" ? "Employee ID" : role === "parent" ? "Student Roll Number" : "Roll Number"} does not match the record for this Email. Please contact Admin.`);
-          return;
-        }
-
-        const recordData = itemsData[itemKey];
 
         try {
           // 2. Create Auth Account
@@ -81,6 +109,9 @@ export default function Auth() {
             username: recordData[idField],
             email: recordData.email,
             role: role,
+            studentUid: recordData.studentUid,
+            studentName: recordData.studentName,
+            studentRegNo: recordData.studentRegNo,
             createdAt: rtdbServerTimestamp(),
           });
 
@@ -353,7 +384,7 @@ export default function Auth() {
                     name: studentData.name,
                     email: studentData.email,
                     role: "student",
-                    rollNo: studentData.rollNo,
+                    registerNo: studentData.registerNo,
                     department: studentData.department,
                     semester: studentData.semester,
                     createdAt: serverTimestamp(),
@@ -361,7 +392,7 @@ export default function Auth() {
                   });
                   const userData = {
                     name: studentData.name,
-                    username: studentData.rollNo,
+                    username: studentData.registerNo,
                     email: studentData.email,
                     role: "student",
                     createdAt: rtdbServerTimestamp(),
@@ -553,8 +584,8 @@ export default function Auth() {
                 <input name="email" type="email" value={form.email} onChange={onChange} required />
               </div>
               <div className="field">
-                <label>{role === "staff" ? "Employee ID" : role === "parent" ? "Student Roll Number" : "Roll Number"}</label>
-                <input name="employeeId" value={form.employeeId} onChange={onChange} required placeholder={role === "parent" ? "Student's Roll Number" : "Provided by Admin"} />
+                <label>{role === "staff" ? "Employee ID" : role === "parent" ? "Student Register Number" : "Register Number"}</label>
+                <input name="employeeId" value={form.employeeId} onChange={onChange} required placeholder={role === "parent" ? "Student's Register Number" : "Provided by Admin"} />
               </div>
               <div className="field">
                 <label>New Password</label>
