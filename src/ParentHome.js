@@ -37,13 +37,30 @@ const ParentHomePage = () => {
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (u) => {
             if (u) {
-                // Fetch user role data
+                let studentToFetchUid = u.uid;
+                let currentStudentData = {};
+
                 const userRef = ref(rtdb, `users/${u.uid}`);
                 const userSnap = await get(userRef);
                 if (userSnap.exists()) {
                     const userData = userSnap.val();
                     setUser(userData);
-                    setStudentData(prev => ({ ...prev, ...userData }));
+
+                    if (userData.role === "parent" && userData.studentUid) {
+                        studentToFetchUid = userData.studentUid;
+                        // Fetch the actual student record for full academic info
+                        const studentMasterRef = ref(rtdb, `students/${userData.studentUid}`);
+                        const studentMasterSnap = await get(studentMasterRef);
+                        if (studentMasterSnap.exists()) {
+                            currentStudentData = studentMasterSnap.val();
+                        } else {
+                            // Fallback to what we have in the parent's user record
+                            currentStudentData = userData;
+                        }
+                    } else {
+                        currentStudentData = userData;
+                    }
+                    setStudentData(prev => ({ ...prev, ...currentStudentData }));
                 }
 
                 // Real-time Settings Listener
@@ -52,49 +69,36 @@ const ParentHomePage = () => {
                     if (snapshot.exists()) {
                         const windowData = snapshot.val();
                         const now = Date.now();
-                        const isWithinWindow = now >= windowData.start && now <= windowData.end;
-                        const isManuallyUnlocked = windowData.isUnlocked || false;
-                        const isOpen = isWithinWindow || isManuallyUnlocked;
+                        const isOpen = (now >= windowData.start && now <= windowData.end) || windowData.isUnlocked;
 
-                        setTimeWindow({
-                            open: isOpen,
-                            end: windowData.end
-                        });
-
-                        // If it closes while we are editing, force exit edit mode
-                        if (!isOpen) {
-                            setIsEditMode(false);
-                        }
+                        setTimeWindow({ open: isOpen, end: windowData.end });
+                        if (!isOpen) setIsEditMode(false);
                     }
                 });
 
-                // Fetch Fees Data
-                const feesRef = ref(rtdb, `fees/${u.uid}`);
+                // Fetch Fees Data using studentUid
+                const feesRef = ref(rtdb, `fees/${studentToFetchUid}`);
                 const feesSnap = await get(feesRef);
                 if (feesSnap.exists()) {
                     setFeesData(feesSnap.val());
                 }
 
-                // Fetch Timetable (Filter by department/semester/division)
-                if (userSnap.exists()) {
-                    const { department, semester, division } = userSnap.val();
-                    // Default to 'A' if division is not set
+                // Fetch Timetable (Filter by department/semester/division from current student data)
+                if (currentStudentData.department && currentStudentData.semester) {
+                    const { department, semester, division } = currentStudentData;
                     const div = division || 'A';
                     const timetableRef = ref(rtdb, `timetables/${department}/${semester}/${div}`);
                     const ttSnap = await get(timetableRef);
-                    if (ttSnap.exists()) {
-                        setTimetable(ttSnap.val());
-                    }
+                    setTimetable(ttSnap.exists() ? ttSnap.val() : {});
                 }
 
-                // Fetch Attendance Data
-                const attendanceRef = ref(rtdb, `attendance/${u.uid}`);
+                // Fetch Attendance Data using studentUid
+                const attendanceRef = ref(rtdb, `attendance/${studentToFetchUid}`);
                 const attSnap = await get(attendanceRef);
                 if (attSnap.exists()) {
                     setAttendanceData(attSnap.val());
-                    // Auto-select current semester if available
-                    if (userSnap.exists() && userSnap.val().semester) {
-                        setSelectedSemester(userSnap.val().semester);
+                    if (currentStudentData.semester) {
+                        setSelectedSemester(currentStudentData.semester);
                     }
                 }
                 setLoading(false);
@@ -243,7 +247,7 @@ const ParentHomePage = () => {
                                 )}
                             </div>
                             <h2 style={{ marginTop: '15px', marginBottom: '5px' }}>{studentData.name || "Student Name"}</h2>
-                            <p style={{ color: '#94a3b8', margin: 0 }}>{studentData.rollNo || "Roll Number"}</p>
+                            <p style={{ color: '#94a3b8', margin: 0 }}>{studentData.registerNo || "Register Number"}</p>
                         </div>
 
                         <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -293,8 +297,8 @@ const ParentHomePage = () => {
                                     <input name="email" value={studentData.email} disabled />
                                 </div>
                                 <div className="form-group">
-                                    <label>Role</label>
-                                    <input name="role" value={studentData.role || "Student"} disabled />
+                                    <label>Register Number</label>
+                                    <input name="registerNo" value={studentData.registerNo || ""} disabled />
                                 </div>
                                 <div className="form-group">
                                     <label>Department</label>

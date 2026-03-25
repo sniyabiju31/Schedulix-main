@@ -17,13 +17,13 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  padding: 24px;
+  padding: 40px 24px;
   color: var(--text-primary);
   /* Cyber-Academia Background */
   background: radial-gradient(circle at 10% 20%, rgb(15, 23, 42) 0%, rgb(20, 30, 50) 90%);
   background-size: cover;
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* Grid overlay */

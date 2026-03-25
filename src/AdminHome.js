@@ -100,6 +100,7 @@ const AdminHomePage = () => {
   const [studentGuardianAddress, setStudentGuardianAddress] = useState("");
   const [studentTotalFees, setStudentTotalFees] = useState(0);
   const [editingStudentId, setEditingStudentId] = useState(null);
+  const [editingStudentUid, setEditingStudentUid] = useState(null);
   const [studentsList, setStudentsList] = useState([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentFilterDept, setStudentFilterDept] = useState("All");
@@ -183,9 +184,10 @@ const AdminHomePage = () => {
     if (activeMenu === 'class-timetable') {
       const fetchTimetable = async () => {
         try {
-          // Default to 'A' if not specified, but selectedDivision should be set
+          // Normalize Semester to number for path (handle both 'Semester X' and 'X')
+          const semNum = String(selectedSemester || "").toUpperCase().replace("SEMESTER", "").trim();
           const div = selectedDivision || 'A';
-          const timetableRef = rtdbRef(rtdb, `timetables/${selectedDept}/${selectedSemester}/${div}`);
+          const timetableRef = rtdbRef(rtdb, `timetables/${selectedDept}/${semNum}/${div}`);
           const snap = await rtdbGet(timetableRef);
           if (snap.exists()) {
             setTimetableData(snap.val());
@@ -584,6 +586,7 @@ const AdminHomePage = () => {
     setStudentGuardianName(student.guardianName || "");
     setStudentGuardianAddress(student.guardianAddress || "");
     setStudentTotalFees(student.totalFees || 0);
+    setEditingStudentUid(student.uid || null);
     setActiveMenu("students");
     setShowStudentForm(true);
   };
@@ -615,9 +618,79 @@ const AdminHomePage = () => {
       };
 
       if (editingStudentId) {
+        // 1. Update master list
         const studentRef = rtdbRef(rtdb, `students/${editingStudentId}`);
         await update(studentRef, studentData);
-        alert("Student updated successfully.");
+
+        // 2. Propagate to Profile (requires UID)
+        let targetUid = editingStudentUid;
+        if (!targetUid) {
+          try {
+            // Attempt optimized query (requires ".indexOn": "email" in RTDB rules)
+            const usersRef = rtdbRef(rtdb, 'users');
+            const q = rtdbQuery(usersRef, orderByChild("email"), equalTo(studentEmail));
+            const snap = await rtdbGet(q);
+            if (snap.exists()) {
+              targetUid = Object.keys(snap.val())[0];
+            }
+          } catch (indexErr) {
+            console.warn("Index not defined fallback: Searching users manually...", indexErr);
+            // Defensively fetch ALL users and search manually (slower but works without index)
+            const usersRef = rtdbRef(rtdb, 'users');
+            const masterUsersSnap = await rtdbGet(usersRef);
+            if (masterUsersSnap.exists()) {
+              const allUsers = masterUsersSnap.val();
+              targetUid = Object.keys(allUsers).find(uid => allUsers[uid].email === studentEmail);
+            }
+          }
+          
+          if (targetUid) {
+            // Link it back to master record so next time it's faster
+            await update(studentRef, { uid: targetUid });
+          }
+        }
+
+        if (targetUid) {
+          // Update Firestore Profile
+          await setDoc(doc(db, "student", targetUid), {
+            ...studentData,
+            role: "student",
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+
+          // Update RTDB User Node
+          await update(rtdbRef(rtdb, `users/${targetUid}`), {
+            name: studentName,
+            email: studentEmail,
+            department: studentDept,
+            semester: studentSemester,
+            division: studentDivision,
+            updatedAt: Date.now()
+          });
+
+          // Update RTDB Student Role Node
+          await update(rtdbRef(rtdb, `students/${targetUid}`), {
+             name: studentName,
+             email: studentEmail,
+             role: "student",
+             updatedAt: Date.now()
+          }).catch(() => {}); // Node might not exist if created via old flow
+
+          // Update Fees if total amount changed
+          if (studentTotalFees) {
+            const feesRef = rtdbRef(rtdb, `fees/${targetUid}`);
+            const feesSnap = await rtdbGet(feesRef);
+            if (feesSnap.exists()) {
+              const currentFees = feesSnap.val();
+              const newPending = Number(studentTotalFees) - (currentFees.paid || 0);
+              await update(feesRef, {
+                total: Number(studentTotalFees),
+                pending: newPending > 0 ? newPending : 0
+              });
+            }
+          }
+        }
+        alert("Student updated and profiles synchronized! ✅");
       } else {
         const studentsRef = rtdbRef(rtdb, 'students');
         const newStudentRef = push(studentsRef);
@@ -630,8 +703,11 @@ const AdminHomePage = () => {
           const newUser = userCredential.user;
           await sendPasswordResetEmail(secondaryAuth, studentEmail);
 
+          await update(rtdbRef(rtdb, `students/${newStudentRef.key}`), { uid: newUser.uid });
+
           await setDoc(doc(db, "student", newUser.uid), {
             ...studentData,
+            uid: newUser.uid,
             username: studentEmail, // RollNo removed, using email as username
             role: "student",
             createdAt: serverTimestamp()
@@ -680,19 +756,7 @@ const AdminHomePage = () => {
       setStudentGuardianName(""); setStudentGuardianAddress("");
       setStudentTotalFees(0);
       setEditingStudentId(null);
-      setStudentName("");
-      setStudentEmail("");
-      setStudentDivision("A");
-      setStudentDOB("");
-      setStudentFatherName("");
-      setStudentMotherName("");
-      setStudentReligion("");
-      setStudentCaste("");
-      setStudentPhone("");
-      setStudentGuardianName("");
-      setStudentGuardianAddress("");
-      setStudentTotalFees(0);
-      setEditingStudentId(null);
+      setEditingStudentUid(null);
       setShowStudentForm(false);
     } catch (err) {
       alert("Error: " + err.message);
@@ -1723,12 +1787,14 @@ const AdminHomePage = () => {
           >
             <LayoutDashboard size={20} className="menu-icon" /> Overview
           </li>
+          {/* 
           <li
             className={activeMenu === "preferences" ? "active" : ""}
             onClick={() => setActiveMenu("preferences")}
           >
             <ClipboardList size={20} className="menu-icon" /> Subject Preferences
           </li>
+          */}
           <li
             className={activeMenu === "class-timetable" ? "active" : ""}
             onClick={() => setActiveMenu("class-timetable")}
@@ -1782,6 +1848,13 @@ const AdminHomePage = () => {
             onClick={() => setActiveMenu("division-settings")}
           >
             <LayoutDashboard size={20} className="menu-icon" /> Division Settings
+          </li>
+          <li
+            onClick={() => window.location.href = "/planner"}
+            style={{ borderTop: "1px solid var(--glass-border)", marginTop: "10px", paddingTop: "10px" }}
+          >
+            <LayoutDashboard size={20} className="menu-icon" style={{ color: "var(--accent-cyan)" }} /> 
+            <span style={{ color: "var(--accent-cyan)", fontWeight: "bold" }}>Planner Dashboard</span>
           </li>
         </ul>
         <button onClick={handleSignOut} className="sign-out-btn">

@@ -4,12 +4,14 @@
     ".write": true,
     "users": {
       ".indexOn": [
-        "role"
+        "role",
+        "email",
+        "registerNo"
       ],
       "$uid": {
         ".read": "auth != null",
         ".write": "auth != null",
-        ".validate": "newData.hasChildren(['email','name','role','createdAt']) && newData.child('email').isString() && newData.child('name').isString() && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'staff' || newData.child('role').val() === 'student')"
+        ".validate": "newData.hasChildren(['email','name','role','createdAt']) && newData.child('email').isString() && newData.child('name').isString() && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'staff' || newData.child('role').val() === 'student' || newData.child('role').val() === 'parent')"
       }
     },
     "admins": {
@@ -34,13 +36,19 @@
     "students": {
       ".indexOn": [
         "email",
-        "rollNo"
+        "rollNo",
+        "registerNo"
       ]
     },
     "teachers": {
       ".indexOn": [
         "email",
         "employeeId"
+      ]
+    },
+    "parents": {
+      ".indexOn": [
+        "email"
       ]
     },
     "subjects": {
@@ -53,6 +61,10 @@
     "preferences": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "planner": {
+      ".read": true,
+      ".write": true
     }
   }
 }

@@ -584,12 +584,14 @@ const StaffHomePage = () => {
           >
             <FileText size={20} className="menu-icon" /> Class Schedule
           </li>
+          {/* 
           <li
             className={activeMenu === "preferences" ? "active" : ""}
             onClick={() => setActiveMenu("preferences")}
           >
             <Star size={20} className="menu-icon" /> Subject Preferences
           </li>
+          */}
           {user && (user.isAdmissionDuty === true || user.isAdmissionDuty === "true") && isWithinDutyPeriod() && (
             <li
               className={activeMenu === "my-students" ? "active" : ""}

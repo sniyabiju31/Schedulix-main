@@ -33,18 +33,30 @@ const StudentHomePage = () => {
     const [attendanceData, setAttendanceData] = useState({});
     const [selectedSemester, setSelectedSemester] = useState("Semester 1");
     const [loading, setLoading] = useState(true);
+    
+    // View Selectors for Timetable
+    const [viewDept, setViewDept] = useState("");
+    const [viewSem, setViewSem] = useState("");
+    const [viewDiv, setViewDiv] = useState("A");
+    const [allTimetables, setAllTimetables] = useState({});
 
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (u) => {
             if (u) {
-                // Fetch user role data
+                // Listen for real-time profile updates
                 const userRef = ref(rtdb, `users/${u.uid}`);
-                const userSnap = await get(userRef);
-                if (userSnap.exists()) {
-                    const userData = userSnap.val();
-                    setUser(userData);
-                    setStudentData(prev => ({ ...prev, ...userData }));
-                }
+                const userUnsubscribe = onValue(userRef, (snapshot) => {
+                    if (snapshot.exists()) {
+                        const userData = snapshot.val();
+                        setUser(userData);
+                        setStudentData(prev => ({ ...prev, ...userData }));
+                        
+                        // Set initial view filters if not already set manually
+                        setViewDept(prev => prev || userData.department || "");
+                        setViewSem(prev => prev || userData.semester || "");
+                        setViewDiv(prev => prev || userData.division || "A");
+                    }
+                });
 
                 // Real-time Settings Listener
                 const settingsRef = ref(rtdb, "settings/student_update_window");
@@ -68,43 +80,71 @@ const StudentHomePage = () => {
                     }
                 });
 
-                // Fetch Fees Data
+                // Fetch Fees Data once
                 const feesRef = ref(rtdb, `fees/${u.uid}`);
-                const feesSnap = await get(feesRef);
-                if (feesSnap.exists()) {
-                    setFeesData(feesSnap.val());
-                }
-
-                // Fetch Timetable (Filter by department/semester/division)
-                if (userSnap.exists()) {
-                    const { department, semester, division } = userSnap.val();
-                    // Default to 'A' if division is not set
-                    const div = division || 'A';
-                    const timetableRef = ref(rtdb, `timetables/${department}/${semester}/${div}`);
-                    const ttSnap = await get(timetableRef);
-                    if (ttSnap.exists()) {
-                        setTimetable(ttSnap.val());
+                get(feesRef).then((feesSnap) => {
+                    if (feesSnap.exists()) {
+                        setFeesData(feesSnap.val());
                     }
-                }
+                });
 
-                // Fetch Attendance Data
+                // Fetch Attendance Data once
                 const attendanceRef = ref(rtdb, `attendance/${u.uid}`);
-                const attSnap = await get(attendanceRef);
-                if (attSnap.exists()) {
-                    setAttendanceData(attSnap.val());
-                    // Auto-select current semester if available
-                    if (userSnap.exists() && userSnap.val().semester) {
-                        setSelectedSemester(userSnap.val().semester);
+                get(attendanceRef).then((attSnap) => {
+                    if (attSnap.exists()) {
+                        setAttendanceData(attSnap.val());
+                        if (u.uid) {
+                             // Initial semester selection
+                             setSelectedSemester(user?.semester || "Semester 1");
+                        }
                     }
-                }
+                });
+
                 setLoading(false);
-                return () => settingsUnsubscribe();
+                return () => {
+                    settingsUnsubscribe();
+                    userUnsubscribe();
+                };
             } else {
                 window.location.href = "/";
             }
         });
         return unsubscribe;
     }, []);
+
+    // Fetch all published timetables (Reactive)
+    useEffect(() => {
+        const ttRef = ref(rtdb, "timetables");
+        const unsubscribe = onValue(ttRef, (snapshot) => {
+            if (snapshot.exists()) {
+                setAllTimetables(snapshot.val());
+            } else {
+                setAllTimetables({});
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Filtered Timetable logic
+    const filteredTimetable = React.useMemo(() => {
+        if (!allTimetables || !viewDept || !viewSem) return {};
+        
+        const targetDept = viewDept.toUpperCase();
+        const targetSem = viewSem.toUpperCase().replace("SEMESTER", "").trim();
+        const targetDiv = (viewDiv || "A").toUpperCase();
+
+        // Try direct lookup with normalization
+        if (allTimetables[targetDept] && allTimetables[targetDept][targetSem] && allTimetables[targetDept][targetSem][targetDiv]) {
+            return allTimetables[targetDept][targetSem][targetDiv];
+        }
+
+        // Try raw lookup (fallback)
+        if (allTimetables[viewDept] && allTimetables[viewDept][viewSem] && allTimetables[viewDept][viewSem][viewDiv]) {
+            return allTimetables[viewDept][viewSem][viewDiv];
+        }
+
+        return {};
+    }, [allTimetables, viewDept, viewSem, viewDiv]);
 
     const handleDataChange = (e) => {
         setStudentData({ ...studentData, [e.target.name]: e.target.value });
@@ -377,35 +417,75 @@ const StudentHomePage = () => {
 
                 {activeMenu === "timetable" && (
                     <div className="home-container">
-                        <h1>Your Timetable</h1>
-                        <table className="timetable">
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    {days.map(day => <th key={day}>{day}</th>)}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {hours.map(hour => (
-                                    <tr key={hour}>
-                                        <td>{hour}</td>
-                                        {days.map(day => {
-                                            const slot = timetable[day] && timetable[day][hour];
-                                            return (
-                                                <td key={day + hour} className={slot ? "has-class" : ""}>
-                                                    {slot ? (
-                                                        <div className="slot-info">
-                                                            <span className="subject">{slot.subject}</span>
-                                                            <span className="details">{slot.room}</span>
-                                                        </div>
-                                                    ) : "-"}
-                                                </td>
-                                            );
-                                        })}
+                        <h1>Academic Timetable</h1>
+                        
+                        <div className="filter-card" style={{
+                            display: 'flex',
+                            gap: '15px',
+                            marginBottom: '25px',
+                            background: 'rgba(255,255,255,0.03)',
+                            padding: '15px',
+                            borderRadius: '12px',
+                            flexWrap: 'wrap'
+                        }}>
+                             <div className="select-container">
+                                <label style={{fontSize: '0.8rem', opacity: 0.7, display: 'block'}}>Department</label>
+                                <select value={viewDept} onChange={(e) => setViewDept(e.target.value)} className="custom-select">
+                                    <option value="">Select Dept</option>
+                                    {Object.keys(allTimetables).map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                             </div>
+                             <div className="select-container">
+                                <label style={{fontSize: '0.8rem', opacity: 0.7, display: 'block'}}>Semester</label>
+                                <select value={viewSem} onChange={(e) => setViewSem(e.target.value)} className="custom-select">
+                                    <option value="">Select Sem</option>
+                                    {viewDept && Object.keys(allTimetables[viewDept] || {}).map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                             </div>
+                             <div className="select-container">
+                                <label style={{fontSize: '0.8rem', opacity: 0.7, display: 'block'}}>Division</label>
+                                <select value={viewDiv} onChange={(e) => setViewDiv(e.target.value)} className="custom-select">
+                                    <option value="">Select Div</option>
+                                    {viewDept && viewSem && Object.keys(allTimetables[viewDept]?.[viewSem] || {}).map(v => <option key={v} value={v}>{v}</option>)}
+                                </select>
+                             </div>
+                        </div>
+
+                        {Object.keys(filteredTimetable).length > 0 ? (
+                            <table className="timetable">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        {days.map(day => <th key={day}>{day}</th>)}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {hours.map(hour => (
+                                        <tr key={hour}>
+                                            <td>{hour}</td>
+                                            {days.map(day => {
+                                                const slot = filteredTimetable[day] && filteredTimetable[day][hour];
+                                                return (
+                                                    <td key={day + hour} className={slot ? "has-class" : ""}>
+                                                        {slot ? (
+                                                            <div className="slot-info">
+                                                                <span className="subject">{slot.subject || slot.name}</span>
+                                                                <span className="details">{slot.room}</span>
+                                                            </div>
+                                                        ) : "-"}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <div className="no-data-alert" style={{textAlign: 'center', padding: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '16px'}}>
+                                <p style={{fontSize: '1.2rem', marginBottom: '10px'}}>No timetable found for the current selection.</p>
+                                <p style={{opacity: 0.6}}>Please use the selectors above to find your class manually.</p>
+                            </div>
+                        )}
                     </div>
                 )}
 
